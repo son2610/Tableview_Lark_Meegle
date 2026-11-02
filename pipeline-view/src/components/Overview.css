@@ -1,0 +1,229 @@
+.pv-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 24px 32px;
+}
+
+.pv-overview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pv-overview__title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 26px;
+  color: var(--pv-text);
+}
+
+.pv-overview__hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--pv-text-3);
+}
+
+.pv-overview__filtered {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: var(--pv-primary-soft);
+  color: var(--pv-primary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+/* Summary chips */
+.pv-overview__chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.pv-overview__chip {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px 12px 18px;
+  border-radius: var(--pv-radius-lg);
+  background: var(--pv-surface);
+  border: 1px solid var(--pv-border);
+  box-shadow: var(--pv-shadow-card);
+  overflow: hidden;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pv-overview__chip::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--pv-border-strong);
+}
+
+.pv-overview__chip--total::before {
+  background: var(--pv-primary);
+}
+.pv-overview__chip--none::before {
+  background: var(--pv-dot-pending);
+}
+.pv-overview__chip--doing::before {
+  background: var(--pv-warning);
+}
+.pv-overview__chip--done::before {
+  background: var(--pv-success);
+}
+.pv-overview__chip--blocked::before {
+  background: var(--pv-danger);
+}
+
+.pv-overview__chip.is-clickable {
+  cursor: pointer;
+}
+
+.pv-overview__chip.is-clickable:hover,
+.pv-overview__chip.is-clickable:focus-visible {
+  border-color: var(--pv-border-strong);
+}
+
+.pv-overview__chip.is-active {
+  border-color: var(--pv-primary);
+  box-shadow: 0 0 0 1px var(--pv-primary);
+}
+
+.pv-overview__chip-value {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+  color: var(--pv-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-overview__chip-label {
+  font-size: 12px;
+  color: var(--pv-text-2);
+}
+
+/* Cards */
+.pv-overview__card {
+  background: var(--pv-surface);
+  border: 1px solid var(--pv-border);
+  border-radius: var(--pv-radius-lg);
+  box-shadow: var(--pv-shadow-card);
+}
+
+.pv-overview__graph {
+  overflow-x: auto;
+  padding: 16px 12px;
+}
+
+.pv-overview__empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--pv-text-3);
+}
+
+/* Per-node table */
+.pv-overview__table {
+  padding: 4px 0;
+}
+
+.pv-overview__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 2fr) 72px minmax(140px, 3fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--pv-border);
+  cursor: pointer;
+  outline: none;
+}
+
+.pv-overview__row:first-child {
+  border-top: none;
+}
+
+.pv-overview__row:hover,
+.pv-overview__row:focus-visible {
+  background: var(--pv-surface-2);
+}
+
+.pv-overview__row.is-active {
+  background: var(--pv-primary-soft);
+}
+
+.pv-overview__row--head {
+  cursor: default;
+  font-size: 12px;
+  color: var(--pv-text-3);
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.pv-overview__row--head:hover {
+  background: none;
+}
+
+.pv-overview__node {
+  min-width: 0;
+  display: flex;
+}
+
+.pv-overview__num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--pv-text);
+}
+
+.pv-overview__bar-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pv-overview__bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--pv-surface-2);
+  box-shadow: inset 0 0 0 1px var(--pv-border);
+  overflow: hidden;
+}
+
+.pv-overview__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--pv-primary);
+  transition: width 0.2s;
+}
+
+.pv-overview__pct {
+  flex: none;
+  width: 40px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--pv-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 719px) {
+  .pv-overview {
+    padding: 12px;
+  }
+
+  .pv-overview__row {
+    grid-template-columns: minmax(100px, 1fr) 48px minmax(90px, 1fr);
+    padding: 8px 12px;
+  }
+}

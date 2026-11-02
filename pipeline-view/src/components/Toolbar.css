@@ -1,0 +1,132 @@
+.pv-toolbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 10px 16px;
+  background: var(--pv-surface);
+  border-bottom: 1px solid var(--pv-border);
+}
+
+.pv-toolbar__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.pv-toolbar__icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--pv-brand-icon);
+  color: var(--pv-on-brand, #ffffff);
+}
+
+.pv-toolbar__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--pv-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+
+.pv-toolbar__count {
+  flex: none;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: var(--pv-surface-2);
+  border: 1px solid var(--pv-border);
+  color: var(--pv-text-2);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.pv-toolbar__filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pv-toolbar__search {
+  width: 220px;
+  max-width: 100%;
+}
+
+.pv-toolbar__select {
+  min-width: 170px;
+  max-width: 260px;
+}
+
+.pv-toolbar__bucket {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pv-toolbar__bucket::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pv-dot-pending);
+}
+
+.pv-toolbar__bucket--done::before {
+  background: var(--pv-success);
+}
+
+.pv-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.pv-toolbar__disabled-wrap {
+  display: inline-flex;
+  cursor: not-allowed;
+}
+
+@media (max-width: 719px) {
+  .pv-toolbar {
+    padding: 8px 12px;
+  }
+
+  /* Title and actions share the first row; filters take the full second row. */
+  .pv-toolbar__title {
+    flex: 1 1 0;
+  }
+
+  .pv-toolbar__actions {
+    order: 1;
+  }
+
+  .pv-toolbar__filters {
+    order: 2;
+    flex-basis: 100%;
+  }
+
+  .pv-toolbar__search,
+  .pv-toolbar__select {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
+  }
+
+  .pv-toolbar__label {
+    display: none;
+  }
+}

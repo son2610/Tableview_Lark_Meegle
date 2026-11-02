@@ -1,0 +1,225 @@
+/* Read-only / host-edited value box, styled like Semi's filled inputs. */
+.pv-fe-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 3px 4px 3px 12px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: var(--pv-surface-2);
+  font-size: 14px;
+  color: var(--pv-text);
+}
+
+.pv-fe-box.is-readonly {
+  padding-right: 12px;
+  border-color: var(--pv-border);
+  background: transparent;
+}
+
+.pv-fe-box.is-invalid,
+.pv-fe-check.is-invalid {
+  border-color: var(--pv-danger);
+  box-shadow: 0 0 0 2px var(--pv-danger-soft);
+}
+
+.pv-fe-box__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.pv-fe-host-btn {
+  flex: none;
+}
+
+.pv-fe-hint {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--pv-text-3);
+}
+
+.pv-fe-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.pv-fe-empty {
+  color: var(--pv-text-disabled);
+}
+
+.pv-fe-link {
+  color: var(--pv-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.pv-fe-link:hover {
+  text-decoration: underline;
+}
+
+.pv-fe-open-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  color: var(--pv-text-3);
+}
+
+.pv-fe-open-link:hover {
+  color: var(--pv-primary);
+}
+
+.pv-fe-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pv-fe-multi-item {
+  display: inline-flex;
+  max-width: 100%;
+  margin: 2px 4px 2px 0;
+}
+
+.pv-fe-check {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: var(--pv-surface-2);
+}
+
+.pv-fe-checkmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--pv-text-2);
+}
+
+.pv-fe-checkmark.is-checked {
+  color: var(--pv-success);
+}
+
+.pv-fe-checkmark__box {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1.5px var(--pv-border-strong);
+}
+
+.pv-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 220px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: var(--pv-surface-2);
+  box-shadow: inset 0 0 0 1px var(--pv-border);
+  color: var(--pv-text-2);
+  font-size: 12px;
+}
+
+.pv-file-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- */
+/* Avatars & user chips (shared with RecordDetail / NodePanel)       */
+/* ---------------------------------------------------------------- */
+
+.pv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  user-select: none;
+}
+
+.pv-avatar--t0 {
+  background: var(--pv-primary);
+}
+
+.pv-avatar--t1 {
+  background: var(--pv-brand-icon);
+}
+
+.pv-avatar--t2 {
+  background: var(--pv-success);
+}
+
+.pv-avatar--t3 {
+  background: var(--pv-danger);
+}
+
+.pv-avatar--t4 {
+  background: var(--pv-text-2);
+}
+
+.pv-avatar--more {
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--pv-surface-2);
+  color: var(--pv-text-2);
+}
+
+.pv-avatar-stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.pv-avatar-stack > .pv-avatar {
+  box-shadow: 0 0 0 1.5px var(--pv-surface);
+}
+
+.pv-avatar-stack > .pv-avatar + .pv-avatar {
+  margin-left: -6px;
+}
+
+.pv-user-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pv-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 200px;
+  height: 24px;
+  padding: 0 10px 0 3px;
+  border-radius: 12px;
+  background: var(--pv-surface-2);
+  box-shadow: inset 0 0 0 1px var(--pv-border);
+  font-size: 13px;
+  color: var(--pv-text);
+}
+
+.pv-user-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

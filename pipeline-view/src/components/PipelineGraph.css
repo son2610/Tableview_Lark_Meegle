@@ -1,0 +1,222 @@
+.pv-graph {
+  position: relative;
+  width: 100%;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.pv-graph__canvas {
+  position: relative;
+  /* Centered while it fits; auto margins collapse to 0 once it overflows, so scrolling starts at the left. */
+  margin: 0 auto;
+}
+
+.pv-graph__edges,
+.pv-graph__ports {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.pv-graph__edges {
+  z-index: 0;
+}
+
+.pv-graph__ports {
+  z-index: 2;
+}
+
+.pv-edge {
+  fill: none;
+  stroke: var(--pv-edge);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.pv-edge--strong {
+  stroke: var(--pv-edge-strong);
+}
+
+.pv-port {
+  fill: var(--pv-surface);
+  stroke: var(--pv-edge);
+  stroke-width: 1.5;
+}
+
+.pv-port--strong {
+  stroke: var(--pv-edge-strong);
+}
+
+.pv-port--active {
+  fill: var(--pv-primary);
+  stroke: var(--pv-primary);
+}
+
+/* ---------------------------------------------------------------- */
+/* Node pills                                                        */
+/* ---------------------------------------------------------------- */
+
+.pv-node {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 0 14px;
+  border: 1.5px solid var(--pv-node-border);
+  background: var(--pv-node-bg);
+  box-shadow: var(--pv-node-shadow);
+  color: var(--pv-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pv-node.is-clickable {
+  cursor: pointer;
+}
+
+.pv-node.is-clickable:hover {
+  border-color: var(--pv-text-3);
+}
+
+.pv-node:focus {
+  outline: none;
+}
+
+.pv-node:focus-visible {
+  outline: 2px solid var(--pv-primary);
+  outline-offset: 3px;
+}
+
+.pv-node__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pv-node__bubbles {
+  position: absolute;
+  top: -10px;
+  right: 14px;
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+
+.pv-node__badge,
+.pv-node__count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--pv-surface);
+  box-shadow: inset 0 0 0 1px var(--pv-border-strong);
+  color: var(--pv-text-2);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-node.is-active .pv-node__badge {
+  background: var(--pv-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--pv-primary);
+  color: var(--pv-primary);
+}
+
+/* Status indicator: 12px dot left of the label. */
+.pv-node__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--pv-dot-pending);
+}
+
+.pv-node__dot--done,
+.pv-node__dot--active-done {
+  background: var(--pv-success);
+}
+
+.pv-node__dot--active-doing {
+  background: var(--pv-warning);
+}
+
+.pv-node__dot--active-blocked {
+  background: var(--pv-danger);
+}
+
+.pv-node__dot--active-unknown {
+  background: var(--pv-primary);
+}
+
+.pv-node__dot--active-todo,
+.pv-node__dot--skipped {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--pv-text-3);
+}
+
+.pv-node__flag {
+  flex: none;
+  width: 12px;
+  color: var(--pv-dot-pending);
+}
+
+/* States (record mode) */
+.pv-node.is-pending {
+  color: var(--pv-text-3);
+}
+
+.pv-node.is-skipped {
+  border-style: dashed;
+  color: var(--pv-text-3);
+  opacity: 0.55;
+}
+
+.pv-node.is-active {
+  border: 2px solid var(--pv-primary);
+  padding: 0 15.5px 0 13.5px;
+}
+
+.pv-node.is-active.is-clickable:hover {
+  border-color: var(--pv-primary);
+}
+
+.pv-node.is-selected {
+  box-shadow:
+    0 0 0 3px var(--pv-primary-soft),
+    var(--pv-node-shadow);
+}
+
+.pv-node.is-selected:not(.is-active) {
+  border-color: var(--pv-text-2);
+}
+
+/* Overview mode */
+.pv-node.is-empty .pv-node__label,
+.pv-node.is-empty .pv-node__bubbles {
+  opacity: 0.5;
+}
+
+/* Preview mode: compact */
+.pv-graph--preview .pv-node {
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 13px;
+}

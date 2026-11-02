@@ -1,0 +1,231 @@
+.pv-empty {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100%;
+  padding: 40px 16px;
+}
+
+.pv-empty__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 720px;
+  padding: 32px 32px 28px;
+  border-radius: var(--pv-radius-lg);
+  background: var(--pv-surface);
+  border: 1px solid var(--pv-border);
+  box-shadow: var(--pv-shadow-card);
+  text-align: center;
+}
+
+.pv-empty__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--pv-brand-icon);
+  color: var(--pv-on-brand, #ffffff);
+}
+
+.pv-empty__title {
+  margin: 16px 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+  color: var(--pv-text);
+}
+
+.pv-empty__desc {
+  margin: 0;
+  max-width: 520px;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--pv-text-2);
+}
+
+/* Static illustration of a pipeline (no data). */
+.pv-empty__graph-wrap {
+  width: 100%;
+  margin: 24px 0 8px;
+  padding: 20px 12px;
+  border-radius: var(--pv-radius);
+  background: var(--pv-surface-2);
+  border: 1px dashed var(--pv-border);
+  overflow-x: auto;
+}
+
+.pv-empty__graph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  margin: 0 auto;
+}
+
+.pv-empty__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 15px;
+  border: 1.5px solid var(--pv-node-border);
+  background: var(--pv-node-bg);
+  box-shadow: var(--pv-node-shadow);
+  font-size: 12px;
+  color: var(--pv-text);
+  white-space: nowrap;
+}
+
+.pv-empty__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pv-dot-pending);
+}
+
+.pv-empty__pill--done .pv-empty__dot {
+  background: var(--pv-success);
+}
+
+.pv-empty__pill--active {
+  border: 2px solid var(--pv-primary);
+}
+
+.pv-empty__pill--active .pv-empty__dot {
+  background: var(--pv-warning);
+}
+
+.pv-empty__pill--pending,
+.pv-empty__pill--end {
+  color: var(--pv-text-3);
+}
+
+.pv-empty__flag {
+  color: var(--pv-text-3);
+}
+
+.pv-empty__line {
+  width: 22px;
+  height: 0;
+  border-top: 1.5px solid var(--pv-edge);
+}
+
+/* Fork / join brackets around the parallel alternatives. */
+.pv-empty__branch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.pv-empty__branch::before,
+.pv-empty__branch::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  bottom: 15px;
+  width: 16px;
+  border: 1.5px solid var(--pv-edge);
+}
+
+.pv-empty__branch::before {
+  left: 0;
+  border-right: none;
+  border-radius: 10px 0 0 10px;
+}
+
+.pv-empty__branch::after {
+  right: 0;
+  border-left: none;
+  border-radius: 0 10px 10px 0;
+}
+
+.pv-empty__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin: 16px 0 24px;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.pv-empty__step {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--pv-radius);
+  border: 1px solid var(--pv-border);
+  background: var(--pv-surface);
+}
+
+.pv-empty__step-num {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pv-primary-soft);
+  color: var(--pv-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pv-empty__step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pv-empty__step-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pv-text);
+}
+
+.pv-empty__step-desc {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--pv-text-2);
+}
+
+.pv-empty__readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--pv-radius);
+  background: var(--pv-surface-2);
+  border: 1px solid var(--pv-border);
+  color: var(--pv-text-2);
+  font-size: 13px;
+  text-align: left;
+}
+
+@media (max-width: 719px) {
+  .pv-empty {
+    padding: 16px;
+  }
+
+  .pv-empty__card {
+    padding: 24px 16px 20px;
+  }
+
+  .pv-empty__steps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pv-empty__graph {
+    margin: 0;
+  }
+}
