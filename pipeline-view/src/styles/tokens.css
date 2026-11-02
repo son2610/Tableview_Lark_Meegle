@@ -1,0 +1,107 @@
+/*
+ * Design tokens for the pipeline view. Semi UI switches to dark mode through
+ * `body[theme-mode="dark"]`; our own components read these variables so both
+ * follow the Lark theme.
+ */
+:root {
+  --pv-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Helvetica Neue', Roboto, Arial, sans-serif;
+
+  --pv-bg: #f5f6f7;
+  --pv-surface: #ffffff;
+  --pv-surface-2: #f8f9fa;
+  --pv-border: #dee0e3;
+  --pv-border-strong: #c9cdd4;
+  --pv-text: #1f2329;
+  --pv-text-2: #646a73;
+  --pv-text-3: #8f959e;
+  --pv-text-disabled: #bbbfc4;
+
+  --pv-primary: #3370ff;
+  --pv-primary-soft: #e1eaff;
+  --pv-success: #2ea121;
+  --pv-success-soft: #d9f5d6;
+  --pv-warning: #f5a623;
+  --pv-warning-soft: #fff1d6;
+  --pv-danger: #f54a45;
+  --pv-danger-soft: #fde2e2;
+  --pv-brand-icon: #7f3bf5;
+
+  --pv-node-bg: #ffffff;
+  --pv-node-border: #d0d3d6;
+  --pv-node-shadow: 0 1px 2px rgba(31, 35, 41, 0.08);
+  --pv-edge: #c9cdd4;
+  --pv-edge-strong: #8f959e;
+  --pv-dot-pending: #bbbfc4;
+
+  /* Pastel chip backgrounds (role chips), cycled by index. */
+  --pv-chip-0: #e1f4ff;
+  --pv-chip-1: #fde2ef;
+  --pv-chip-2: #e8e9eb;
+  --pv-chip-3: #d5f6f2;
+  --pv-chip-4: #e4f7e1;
+  --pv-chip-5: #f4e3fb;
+  --pv-chip-6: #fff4d1;
+  --pv-chip-7: #e6edff;
+
+  --pv-radius: 8px;
+  --pv-radius-lg: 12px;
+  --pv-shadow-card: 0 2px 8px rgba(31, 35, 41, 0.06);
+}
+
+body[theme-mode='dark'] {
+  --pv-bg: #1a1a1a;
+  --pv-surface: #232324;
+  --pv-surface-2: #2a2a2b;
+  --pv-border: #3a3a3c;
+  --pv-border-strong: #505053;
+  --pv-text: #ebebeb;
+  --pv-text-2: #a6a6a6;
+  --pv-text-3: #858585;
+  --pv-text-disabled: #5f5f5f;
+
+  --pv-primary: #4c88ff;
+  --pv-primary-soft: #1e2d4f;
+  --pv-success: #51ba43;
+  --pv-success-soft: #1f3a1c;
+  --pv-warning: #f8b74a;
+  --pv-warning-soft: #3d2f12;
+  --pv-danger: #f76964;
+  --pv-danger-soft: #45201f;
+  --pv-brand-icon: #9a63f8;
+
+  --pv-node-bg: #2a2a2b;
+  --pv-node-border: #4a4a4d;
+  --pv-node-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --pv-edge: #505053;
+  --pv-edge-strong: #8a8a8d;
+  --pv-dot-pending: #6b6b6e;
+
+  --pv-chip-0: #16344a;
+  --pv-chip-1: #4a1f33;
+  --pv-chip-2: #333335;
+  --pv-chip-3: #143f3a;
+  --pv-chip-4: #1f3a1c;
+  --pv-chip-5: #3b2347;
+  --pv-chip-6: #42381a;
+  --pv-chip-7: #1e2d4f;
+
+  --pv-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--pv-font);
+  background: var(--pv-bg);
+  color: var(--pv-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}

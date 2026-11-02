@@ -1,0 +1,42 @@
+{
+  "name": "lark-pipeline-view",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lark Base table view extension: Meegle-style pipeline view driven by a single-select stage field",
+  "scripts": {
+    "start": "npm run dev",
+    "dev": "cross-env NODE_ENV=development webpack-dev-server --mode development --config ./config/webpack.config.js",
+    "demo": "cross-env NODE_ENV=development MOCK=1 webpack-dev-server --mode development --config ./config/webpack.config.js",
+    "build": "cross-env NODE_ENV=production webpack --mode production --config ./config/webpack.config.js",
+    "build:demo": "cross-env NODE_ENV=production MOCK=1 webpack --mode production --config ./config/webpack.config.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "upload": "npm run build && opdev upload ./dist"
+  },
+  "dependencies": {
+    "@douyinfe/semi-icons": "2.90.13",
+    "@douyinfe/semi-ui": "2.90.13",
+    "@lark-opdev/block-bitable-api": "0.4.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@lark-opdev/block-bitable-webpack-utils": "0.1.7",
+    "@pmmmwh/react-refresh-webpack-plugin": "0.5.17",
+    "@types/react": "18.3.27",
+    "@types/react-dom": "18.3.7",
+    "cross-env": "7.0.3",
+    "css-loader": "6.11.0",
+    "esbuild-loader": "2.21.0",
+    "html-webpack-plugin": "5.6.6",
+    "mini-css-extract-plugin": "2.10.0",
+    "react-refresh": "0.14.2",
+    "style-loader": "3.3.4",
+    "typescript": "4.9.5",
+    "vitest": "2.1.9",
+    "webpack": "5.104.1",
+    "webpack-cli": "4.10.0",
+    "webpack-dev-server": "4.15.2",
+    "webpackbar": "5.0.2"
+  }
+}
