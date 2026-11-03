@@ -9,9 +9,9 @@ const detail: DictPart = {
       'Giai đoạn “{name}” không còn tồn tại trong quy trình (lựa chọn đã bị xóa hoặc đổi tên). Hãy bắt đầu lại từ một bước bên dưới.',
 
     'detail.state.done': 'Đã xong',
-    'detail.state.active': 'Đang thực hiện',
+    'detail.state.active': 'Bước hiện tại',
     'detail.state.pending': 'Chưa tới',
-    'detail.state.skipped': 'Bỏ qua',
+    'detail.state.skipped': 'Đã bỏ qua',
 
     'detail.graph.title': 'Quy trình',
     'detail.graph.empty': 'Trường giai đoạn chưa có lựa chọn nào. Hãy thêm bước trong Cài đặt.',
@@ -62,6 +62,8 @@ const detail: DictPart = {
     'detail.action.advanceMenu': 'Hoàn thành & chuyển tới…',
     'detail.action.complete': 'Hoàn thành quy trình',
     'detail.action.finished': 'Quy trình đã hoàn thành',
+    'detail.action.noDoneStatus':
+      'Đây là bước cuối. Để đánh dấu hoàn thành, hãy chọn trường trạng thái có một trạng thái thuộc nhóm “Hoàn thành” trong Cài đặt.',
     'detail.action.rollbackMenu': 'Trả về…',
     'detail.action.statusNotDone':
       'Hãy chuyển trạng thái sang một trạng thái “Hoàn thành” trước khi sang bước tiếp theo.',
@@ -80,6 +82,7 @@ const detail: DictPart = {
     'detail.field.noOptions': 'Không có lựa chọn',
     'detail.field.datePlaceholder': 'Chọn ngày',
     'detail.field.phonePlaceholder': 'Nhập số điện thoại',
+    'detail.field.emailPlaceholder': 'Nhập địa chỉ email',
     'detail.field.computed': 'Tự động tính',
     'detail.field.editInLark': 'Sửa trong Lark',
     'detail.field.saveFailed': 'Không lưu được giá trị',
@@ -91,7 +94,7 @@ const detail: DictPart = {
       'Stage “{name}” no longer exists in the pipeline (the option was deleted or renamed). Start again from one of the steps below.',
 
     'detail.state.done': 'Done',
-    'detail.state.active': 'In progress',
+    'detail.state.active': 'Current step',
     'detail.state.pending': 'Not reached',
     'detail.state.skipped': 'Skipped',
 
@@ -144,6 +147,8 @@ const detail: DictPart = {
     'detail.action.advanceMenu': 'Complete & go to…',
     'detail.action.complete': 'Complete pipeline',
     'detail.action.finished': 'Pipeline completed',
+    'detail.action.noDoneStatus':
+      'This is the last step. To mark records finished, pick a status field with a status in the “Done” category in Settings.',
     'detail.action.rollbackMenu': 'Send back to…',
     'detail.action.statusNotDone': 'Set the status to a “Done” status before moving to the next step.',
     'detail.action.failed': 'The action could not be completed',
@@ -161,6 +166,7 @@ const detail: DictPart = {
     'detail.field.noOptions': 'No options',
     'detail.field.datePlaceholder': 'Pick a date',
     'detail.field.phonePlaceholder': 'Enter a phone number',
+    'detail.field.emailPlaceholder': 'Enter an email address',
     'detail.field.computed': 'Computed',
     'detail.field.editInLark': 'Edit in Lark',
     'detail.field.saveFailed': 'Could not save the value',

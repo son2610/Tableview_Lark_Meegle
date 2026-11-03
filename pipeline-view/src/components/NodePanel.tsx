@@ -12,6 +12,7 @@ import {
   IconUserAdd,
 } from '@douyinfe/semi-icons';
 import { getSelectId, getUsers, isCellEmpty } from '../core/cell';
+import { getDoneStatusId } from '../core/config';
 import { getStatusCategory } from '../core/state';
 import { nextTargets, requiredProgress, rollbackTargets } from '../core/transitions';
 import type { TransitionContext } from '../core/transitions';
@@ -73,6 +74,7 @@ function MenuButton(props: {
     <Dropdown
       trigger="click"
       position="bottomRight"
+      clickToHide
       render={
         <Dropdown.Menu>
           {items.map((item) => (
@@ -146,6 +148,9 @@ export function NodePanel(props: NodePanelProps): JSX.Element | null {
   const isCurrent = states.current === nodeId;
   const notStarted = states.current === null;
   const isTerminal = (graph.successors.get(nodeId) ?? []).length === 0;
+  // Fields of the current step and of steps not reached yet can be filled in; completed or
+  // skipped steps are read-only so a step that passed its gate cannot lose its required data.
+  const fieldsEditable = editable && (isCurrent || state === 'pending');
 
   const progress = isCurrent ? requiredProgress(tctx, record, nodeId) : null;
   const successors = isCurrent ? nextTargets(tctx, record) : [];
@@ -287,7 +292,7 @@ export function NodePanel(props: NodePanelProps): JSX.Element | null {
     notice = (
       <div className={`pv-np-notice pv-np-notice--${key}`}>
         <span>{t(`detail.node.notice.${key}`)}</span>
-        {editable && rules.length > 0 && state !== 'done' ? (
+        {fieldsEditable && rules.length > 0 ? (
           <span className="pv-np-muted">{t('detail.node.notice.editAhead')}</span>
         ) : null}
       </div>
@@ -346,7 +351,7 @@ export function NodePanel(props: NodePanelProps): JSX.Element | null {
                   key={`${field.id}:${editorResets[field.id] ?? 0}`}
                   field={field}
                   value={value}
-                  editable={editable}
+                  editable={fieldsEditable}
                   invalid={invalid}
                   optionColors={optionColors}
                   onCommit={(v) => void commitField(field.id, v)}
@@ -409,6 +414,9 @@ export function NodePanel(props: NodePanelProps): JSX.Element | null {
           <IconTickCircle />
           {t('detail.action.finished')}
         </span>
+      ) : !getDoneStatusId(config, statusField) ? (
+        // Finishing sets a "Done" status: without one, completing could only fail.
+        <span className="pv-np-muted pv-np-no-done">{t('detail.action.noDoneStatus')}</span>
       ) : (
         <Button
           type="primary"

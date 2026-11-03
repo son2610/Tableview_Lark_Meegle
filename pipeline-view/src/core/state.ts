@@ -26,8 +26,8 @@ export function getStatusCategory(config: PipelineConfig, statusOptionId: string
  *   (history read from config.historyFieldId, if configured).
  * - For every node:
  *   current node -> 'done' if it is terminal and currentCategory === 'done' (finished), else 'active';
- *   strict ancestor of current -> 'done' when history is empty/unconfigured or the node is visited,
- *                                 'skipped' otherwise;
+ *   strict ancestor of current -> 'done' when history is empty/unconfigured/ambiguous (see
+ *                                 trustedVisited) or the node is visited, 'skipped' otherwise;
  *   everything else -> 'pending'.
  * - When current is null every node is 'pending'.
  * "Empty history" means no line of the history cell could be parsed. Names are compared
@@ -55,6 +55,7 @@ export function computeNodeStates(
 
   const history = readHistory(record, config);
   const visited = visitedNodeIds(graph, history);
+  const trusted = trustedVisited(graph, history);
   const finished =
     current !== null && (graph.successors.get(current) ?? []).length === 0 && currentCategory === 'done';
 
@@ -63,7 +64,7 @@ export function computeNodeStates(
   for (const node of graph.nodes) {
     let state: NodeState = 'pending';
     if (node.id === current) state = finished ? 'done' : 'active';
-    else if (before.has(node.id)) state = history.length === 0 || visited.has(node.id) ? 'done' : 'skipped';
+    else if (before.has(node.id)) state = trusted === null || trusted.has(node.id) ? 'done' : 'skipped';
     states.set(node.id, state);
   }
 
@@ -97,4 +98,17 @@ export function visitedNodeIds(graph: PipelineGraph, history: HistoryEntry[]): S
   const visited = new Set<string>();
   for (const node of graph.nodes) if (names.has(node.name.trim())) visited.add(node.id);
   return visited;
+}
+
+/**
+ * Visited node ids when the history can say which ancestors were visited, else null: no line
+ * could be parsed, or a logged name matches no current node (an option was renamed or deleted,
+ * so the log no longer maps back to nodes and must not hide ancestors as skipped).
+ */
+export function trustedVisited(graph: PipelineGraph, history: HistoryEntry[]): Set<string> | null {
+  if (history.length === 0) return null;
+  const names = new Set(graph.nodes.map((n) => n.name.trim()));
+  const known = (name: string | undefined) => !name || names.has(name.trim());
+  if (!history.every((e) => known(e.from) && known(e.to))) return null;
+  return visitedNodeIds(graph, history);
 }

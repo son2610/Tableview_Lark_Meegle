@@ -197,6 +197,15 @@ describe('computeNodeStates', () => {
     expect(computeNodeStates(graph, record({ stage: stage('C'), status: status('gone') }), config(), fieldById).currentCategory).toBeNull();
   });
 
+  it('does not mark ancestors skipped when the log names a node that no longer exists (renamed option)', () => {
+    // Walked A → B → C, then option B was renamed to "B2" (same id).
+    const renamed = STAGE_OPTIONS.slice(0, 5).map((o) => (o.id === 'B' ? { ...o, name: 'B2' } : o));
+    const g = buildGraph(renamed, null);
+    const rec = record({ stage: stage('C'), history: walked('A', 'B', 'C') });
+    const s = computeNodeStates(g, rec, config({ edges: null }), fieldById);
+    expect(statesOf(s.states)).toEqual({ A: 'done', B: 'done', C: 'active', D: 'pending', E: 'pending' });
+  });
+
   it('accepts a plain string history cell and matches names ignoring surrounding spaces', () => {
     const text = `[2026-11-02 09:00] ▶  ${name('A')}  \n[2026-11-02 10:00] ${name('A')} → ${name('C')}`;
     const s = computeNodeStates(linear, record({ stage: stage('C'), history: text }), config({ edges: null }), fieldById);

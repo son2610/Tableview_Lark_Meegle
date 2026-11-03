@@ -26,7 +26,7 @@ interface Summary {
   inProgress: number;
   finished: number;
   blocked: number;
-  /** In-progress records currently at each node. */
+  /** Records currently at each node, finished ones included (a terminal node counts its outcomes). */
   perNode: Map<string, number>;
 }
 
@@ -37,11 +37,13 @@ export function summarize(ctx: PipelineContextValue, records: RecordData[], stat
     const states = statesById.get(record.id);
     if (!states || states.current === null) {
       summary.notStarted++;
-    } else if (states.finished) {
+      continue;
+    }
+    perNode.set(states.current, (perNode.get(states.current) ?? 0) + 1);
+    if (states.finished) {
       summary.finished++;
     } else {
       summary.inProgress++;
-      perNode.set(states.current, (perNode.get(states.current) ?? 0) + 1);
       if (states.currentCategory === 'blocked') summary.blocked++;
     }
   }
@@ -93,6 +95,7 @@ export function Overview(props: OverviewProps) {
               key={chip.key}
               className={`pv-overview__chip pv-overview__chip--${chip.tone}${clickable ? ' is-clickable' : ''}${active ? ' is-active' : ''}`}
               role={clickable ? 'button' : undefined}
+              aria-pressed={clickable ? active : undefined}
               tabIndex={clickable ? 0 : undefined}
               onClick={clickable ? activate : undefined}
               onKeyDown={clickable ? onActivate(activate) : undefined}
@@ -123,13 +126,11 @@ export function Overview(props: OverviewProps) {
       </section>
 
       {order.length > 0 && (
-        <section className="pv-overview__card pv-overview__table" role="table">
-          <div className="pv-overview__row pv-overview__row--head" role="row">
-            <span role="columnheader">{t('common.overview.node')}</span>
-            <span role="columnheader" className="pv-overview__num">
-              {t('common.overview.count')}
-            </span>
-            <span role="columnheader">{t('common.overview.share')}</span>
+        <section className="pv-overview__card pv-overview__table">
+          <div className="pv-overview__row pv-overview__row--head" aria-hidden>
+            <span>{t('common.overview.node')}</span>
+            <span className="pv-overview__num">{t('common.overview.count')}</span>
+            <span>{t('common.overview.share')}</span>
           </div>
           {order.map((nodeId) => {
             const node = ctx.graph.nodeById.get(nodeId);
@@ -141,18 +142,20 @@ export function Overview(props: OverviewProps) {
               <div
                 key={nodeId}
                 className={`pv-overview__row${active ? ' is-active' : ''}`}
-                role="row"
+                role="button"
+                aria-pressed={active}
+                aria-label={`${node.name}: ${count} (${share}%)`}
                 tabIndex={0}
                 onClick={() => toggle(nodeId)}
                 onKeyDown={onActivate(() => toggle(nodeId))}
               >
-                <span role="cell" className="pv-overview__node">
+                <span className="pv-overview__node">
                   <OptionTag option={node} colors={ctx.optionColors} size="small" />
                 </span>
-                <span role="cell" className="pv-overview__num">
+                <span className="pv-overview__num">
                   {count}
                 </span>
-                <span role="cell" className="pv-overview__bar-cell">
+                <span className="pv-overview__bar-cell">
                   <span className="pv-overview__bar">
                     <span className="pv-overview__bar-fill" style={{ width: `${summary.total > 0 ? (count / summary.total) * 100 : 0}%` }} />
                   </span>

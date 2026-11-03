@@ -58,7 +58,8 @@ export interface FieldMeta {
 
 /**
  * Raw cell value in the SDK's IOpenCellValue shape:
- * - Text/Email/Barcode: `{type:'text'|'url'|'mention', text, link?}[]`
+ * - Text/Barcode: `{type:'text'|'url'|'mention', text, link?}[]`
+ * - Email: string
  * - Number/Currency/Progress/Rating: number
  * - SingleSelect: `{id, text}`; MultiSelect: `{id, text}[]`
  * - DateTime/CreatedTime/ModifiedTime: ms timestamp number

@@ -48,7 +48,8 @@ export function matchesStage(states: RecordNodeStates | undefined, filter: Stage
   if (!states) return false;
   if (filter === STAGE_NONE) return states.current === null;
   if (filter === STAGE_FINISHED) return states.finished;
-  return states.current === filter && !states.finished;
+  // A node lists every record at it, finished ones included (so each outcome of a branch can be listed).
+  return states.current === filter;
 }
 
 function readStored(key: string): string | null {
@@ -121,10 +122,13 @@ function AppBody({ data }: { data: PipelineData }) {
   if (data.phase === 'loading') {
     return (
       <div className="pv-app pv-app--center">
-        <Spin
-          size="large"
-          tip={data.loadedCount > 0 ? t('common.loadingRecords', { count: data.loadedCount }) : t('common.loading')}
-        />
+        {/* The tip sits outside Spin: Semi sizes the tip to the 32px spinner and wraps every word. */}
+        <div className="pv-app__loading" role="status">
+          <Spin size="large" />
+          <span className="pv-app__loading-tip">
+            {data.loadedCount > 0 ? t('common.loadingRecords', { count: data.loadedCount }) : t('common.loading')}
+          </span>
+        </div>
       </div>
     );
   }
@@ -225,6 +229,9 @@ function ReadyView({ data, ctx }: { data: PipelineData; ctx: PipelineContextValu
 
   const selectedRecord = selectedRecordId ? ctx.recordById.get(selectedRecordId) : undefined;
   const ready = data.configured && data.hasSavedConfig;
+  // The narrow picker must always contain the open record, even when the filters hide it.
+  const pickerRecords =
+    selectedRecord && !listRecords.includes(selectedRecord) ? [selectedRecord, ...listRecords] : listRecords;
 
   const settings = ctx.editable ? (
     <SettingsPanel
@@ -292,10 +299,10 @@ function ReadyView({ data, ctx }: { data: PipelineData; ctx: PipelineContextValu
               style={{ width: '100%' }}
               placeholder={t('common.selectRecord')}
               emptyContent={t('common.noMatch')}
-              virtualize={listRecords.length > 200 ? { height: 320, width: '100%', itemSize: 36 } : undefined}
+              virtualize={pickerRecords.length > 200 ? { height: 320, width: '100%', itemSize: 36 } : undefined}
               optionList={[
                 { value: PICKER_OVERVIEW, label: t('common.overview') },
-                ...listRecords.map((record) => ({ value: record.id, label: recordTitle(ctx, record) || t('common.untitled') })),
+                ...pickerRecords.map((record) => ({ value: record.id, label: recordTitle(ctx, record) || t('common.untitled') })),
               ]}
             />
           </div>

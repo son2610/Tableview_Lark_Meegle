@@ -8,6 +8,7 @@ import {
   getMultiSelectIds,
   getSelectId,
   getUsers,
+  hasRichText,
   isCellEmpty,
   isComputedField,
   isEditableInline,
@@ -259,6 +260,35 @@ describe('field capabilities', () => {
     for (const t of [FieldType.User, FieldType.Attachment, FieldType.DuplexLink, FieldType.Location, FieldType.Formula, FieldType.GroupChat]) {
       expect(isEditableInline(f(t))).toBe(false);
     }
+  });
+});
+
+describe('hasRichText', () => {
+  const mention = { type: 'mention', mentionType: 'User', id: 'ou_1', token: 't', text: '@An', name: 'An' };
+  it('is false for plain text that the inline editor can round-trip', () => {
+    expect(hasRichText(f(FieldType.Text), null)).toBe(false);
+    expect(hasRichText(f(FieldType.Text), 'plain')).toBe(false);
+    expect(hasRichText(f(FieldType.Text), [seg('a'), seg('b')])).toBe(false);
+    expect(hasRichText(f(FieldType.Url), [{ type: 'url', text: 'https://x.dev', link: 'https://x.dev' }])).toBe(false);
+    expect(hasRichText(f(FieldType.Url), [{ type: 'url', text: '', link: 'https://x.dev' }])).toBe(false);
+  });
+
+  it('is true when an edit through the plain-text editor would drop mentions, links or link text', () => {
+    expect(hasRichText(f(FieldType.Text), [seg('Ask '), mention])).toBe(true);
+    expect(hasRichText(f(FieldType.Text), [seg('See '), { type: 'url', text: 'spec', link: 'https://x.dev' }])).toBe(true);
+    expect(hasRichText(f(FieldType.Barcode), [mention])).toBe(true);
+    expect(hasRichText(f(FieldType.Url), [{ type: 'url', text: 'Design doc', link: 'https://x.dev' }])).toBe(true);
+    expect(
+      hasRichText(f(FieldType.Url), [
+        { type: 'url', text: 'https://a.dev', link: 'https://a.dev' },
+        { type: 'url', text: 'https://b.dev', link: 'https://b.dev' },
+      ]),
+    ).toBe(true);
+  });
+
+  it('is false for other field types', () => {
+    expect(hasRichText(f(FieldType.Number), 3)).toBe(false);
+    expect(hasRichText(f(FieldType.Email), 'a@b.c')).toBe(false);
   });
 });
 

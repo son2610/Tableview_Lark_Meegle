@@ -63,7 +63,15 @@ Cấu hình được lưu riêng cho từng view (qua `bitable.bridge.setData`).
 - Nếu sửa trường Giai đoạn trực tiếp trong Grid view, việc kiểm tra trường bắt buộc sẽ bị bỏ qua. View này chỉ kiểm tra những lần chuyển bước thực hiện qua nó. Muốn chặn hoàn toàn thì cần thêm một automation phía Base.
 - Lịch sử được ghi vào một trường Text. Khi một tên bước bị đổi, các dòng lịch sử cũ vẫn mang tên cũ, nên trạng thái "đã đi qua" của bước đó có thể hiển thị sai.
 
-## 5. Phát triển
+- Ô Text có @mention hoặc link, và ô URL có tên hiển thị khác với đường link, sẽ được mở bằng trình sửa gốc của Lark (nút "Sửa trong Lark"). Lý do là trình sửa trong view chỉ xử lý văn bản thuần; sửa trực tiếp sẽ làm mất mention hoặc link.
+- Mỗi lần chuyển bước, view đọc lại bản ghi mới nhất từ Base trước khi kiểm tra và ghi, nên phát sinh thêm một lần gọi API. Nếu có chọn view nguồn, mọi thay đổi sẽ khiến view tải lại toàn bộ danh sách.
+
+## 5. Xử lý sự cố
+
+- Nếu `npm run build` báo `Cannot find module '@bdeefe/feishu-devtools-core/...'`: lỗi này xảy ra sau một lần `npm install <gói>`, vì npm đã dọn mất các module mà `@lark-opdev/cli` tự chép vào lúc cài. Cách sửa: xóa thư mục `node_modules/@lark-opdev/cli` rồi chạy lại `npm install`.
+- Nếu upload báo lỗi: chạy `opdev whoami` để kiểm tra tài khoản đang đăng nhập. Tài khoản đó phải sở hữu App ID trong `app.json`, và app phải có đúng block Table View có BlockTypeID trong `block.json`.
+
+## 6. Phát triển
 
 ```bash
 npm run demo        # chạy với dữ liệu giả lập, cổng 5180

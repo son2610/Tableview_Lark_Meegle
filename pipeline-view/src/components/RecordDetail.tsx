@@ -200,6 +200,7 @@ export function RecordDetail(props: RecordDetailProps): JSX.Element {
     <Dropdown
       trigger="click"
       position="bottomLeft"
+      clickToHide
       showTick
       render={
         <Dropdown.Menu>

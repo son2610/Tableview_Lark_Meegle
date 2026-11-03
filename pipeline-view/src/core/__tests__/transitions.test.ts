@@ -217,6 +217,14 @@ describe('rollbackTargets', () => {
     );
     expect(rollbackTargets(makeCtx(), record({ stage: stage('H'), history }))).toEqual(['A', 'B', 'C', 'F']);
   });
+
+  it('does not filter by history once the log names a node that no longer exists (renamed option)', () => {
+    const history = historyOf(line('start', undefined, 'A'), line('advance', 'A', 'B'), line('advance', 'B', 'C'));
+    const ctx = makeCtx();
+    const renamed = STAGE_OPTIONS.map((o) => (o.id === 'B' ? { ...o, name: 'Stage B2' } : o));
+    const tc = { ...ctx, graph: buildGraph(renamed, ctx.config.edges) };
+    expect(rollbackTargets(tc, record({ stage: stage('C'), history }))).toEqual(['A', 'B']);
+  });
 });
 
 describe('buildTransitionPatch', () => {

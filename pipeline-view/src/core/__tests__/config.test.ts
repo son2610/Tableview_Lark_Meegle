@@ -402,6 +402,7 @@ describe('normalizeConfig', () => {
     };
     expect(normalizeConfig(raw, FIELDS).edges).toEqual([
       { from: 's1', to: 's2' },
+      { from: 's2', to: 's3' }, // bridged through the deleted option
       { from: 's1', to: 's3' },
     ]);
     expect(normalizeConfig({ ...validRaw(), edges: [] }, FIELDS).edges).toEqual([]);
@@ -409,6 +410,40 @@ describe('normalizeConfig', () => {
     const { edges: _omit, ...withoutEdges } = validRaw();
     void _omit;
     expect(normalizeConfig(withoutEdges, FIELDS).edges).toBeNull();
+  });
+
+  it('bridges edges over deleted middle options instead of splitting the pipeline', () => {
+    // s1 → X → s2, X → s3, s1 → Y → Z → s3 with X, Y, Z deleted.
+    const raw = {
+      ...validRaw(),
+      edges: [
+        { from: 's1', to: 'X' },
+        { from: 'X', to: 's2' },
+        { from: 'X', to: 's3' },
+        { from: 's1', to: 'Y' },
+        { from: 'Y', to: 'Z' },
+        { from: 'Z', to: 's3' },
+      ],
+    };
+    expect(normalizeConfig(raw, FIELDS).edges).toEqual([
+      { from: 's1', to: 's2' },
+      { from: 's1', to: 's3' },
+    ]);
+  });
+
+  it('bridges only to survivors and never creates self loops or loops forever', () => {
+    const raw = {
+      ...validRaw(),
+      edges: [
+        { from: 's1', to: 'X' },
+        { from: 'X', to: 'Y' },
+        { from: 'Y', to: 'X' }, // cycle between deleted options
+        { from: 'Y', to: 's1' }, // back to the source: no self loop
+        { from: 'Y', to: 's3' },
+        { from: 's2', to: 'gone' }, // dead end: dropped
+      ],
+    };
+    expect(normalizeConfig(raw, FIELDS).edges).toEqual([{ from: 's1', to: 's3' }]);
   });
 
   it('keeps known status categories, guesses new options and drops stale ids', () => {

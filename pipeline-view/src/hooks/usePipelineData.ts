@@ -22,7 +22,8 @@ import type {
 import { createDefaultConfig, getDoneStatusId, isConfigured, normalizeConfig } from '../core/config';
 import { buildGraph } from '../core/graph';
 import { layoutGraph } from '../core/layout';
-import { isComputedField, makeSelectValue } from '../core/cell';
+import { getSelectId, isComputedField, makeSelectValue } from '../core/cell';
+import { getStatusCategory } from '../core/state';
 import { buildTransitionPatch, currentNodeId, nextTargets, rollbackTargets, validateNode } from '../core/transitions';
 import type { TransitionContext } from '../core/transitions';
 import { createT, toLang } from '../i18n';
@@ -126,14 +127,45 @@ export function mergeRecordChanges(
   return next;
 }
 
-/** Put back the values `keys` had in `before` (used to undo an optimistic write). */
-function restoreKeys(current: Record<string, CellValue>, before: Record<string, CellValue>, keys: string[]) {
+/**
+ * Undo an optimistic write: put back the values `keys` had in `before`, but only where the
+ * cell still holds the written value (a newer local write or a fetched remote value wins).
+ */
+export function restoreKeys(
+  current: Record<string, CellValue>,
+  before: Record<string, CellValue>,
+  keys: string[],
+  written: Record<string, CellValue>,
+): Record<string, CellValue> {
   const out = { ...current };
   for (const key of keys) {
+    if (out[key] !== written[key]) continue;
     if (Object.prototype.hasOwnProperty.call(before, key)) out[key] = before[key];
     else delete out[key];
   }
   return out;
+}
+
+/** This view's writes to one record: `seq` counts optimistic writes, `inflight` holds unsettled host calls. */
+interface WriteState {
+  seq: number;
+  inflight: Set<Promise<unknown>>;
+}
+
+/**
+ * Returns `isDirty(id)`: true when a record was written by this view while a read that starts
+ * now was running (or had a write still in flight when it started). Such a read may miss the
+ * write, so its result must not replace the local optimistic copy.
+ */
+function markWrites(writes: Map<string, WriteState>): (recordId: string) => boolean {
+  const marks = new Map<string, { seq: number; busy: boolean }>();
+  for (const [id, w] of writes) marks.set(id, { seq: w.seq, busy: w.inflight.size > 0 });
+  return (recordId) => {
+    const w = writes.get(recordId);
+    if (!w) return false;
+    const mark = marks.get(recordId);
+    return !mark || mark.busy || mark.seq !== w.seq;
+  };
 }
 
 /** useState whose latest value is also readable synchronously from async callbacks. */
@@ -178,6 +210,11 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
   /** Source of truth for records; every mutation goes through commitRecords. */
   const recordsRef = useRef<RecordData[]>([]);
   const ctxRef = useRef<PipelineContextValue | null>(null);
+  const writesRef = useRef(new Map<string, WriteState>());
+  /** Full record loads in progress; incremental flushes wait for them (their events queue up). */
+  const reloadingRef = useRef(0);
+  /** Queue records to be fetched again (set by the host-events effect). */
+  const refetchRef = useRef<(recordIds: string[]) => void>(() => undefined);
 
   const commitRecords = useCallback((update: (prev: RecordData[]) => RecordData[]) => {
     recordsRef.current = update(recordsRef.current);
@@ -187,16 +224,33 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
   const loadRecords = useCallback(
     async (viewId: string | undefined, onProgress?: (loaded: number) => void) => {
       const seq = ++recordsSeqRef.current;
-      let loaded: RecordData[];
+      const isDirty = markWrites(writesRef.current);
+      reloadingRef.current++;
       try {
-        loaded = await adapter.getAllRecords({ viewId, onProgress });
-      } catch (e) {
-        if (!viewId) throw e;
-        console.warn('[pipeline-view] could not load the source view, falling back to all records', e);
-        loaded = await adapter.getAllRecords({ onProgress });
+        let loaded: RecordData[];
+        try {
+          loaded = await adapter.getAllRecords({ viewId, onProgress });
+        } catch (e) {
+          if (!viewId) throw e;
+          console.warn('[pipeline-view] could not load the source view, falling back to all records', e);
+          loaded = await adapter.getAllRecords({ onProgress });
+        }
+        if (!mountedRef.current || seq !== recordsSeqRef.current) return;
+        // Records written while loading keep their local copy and are read again afterwards.
+        const local = new Map(recordsRef.current.map((r) => [r.id, r] as const));
+        const again: string[] = [];
+        commitRecords(() =>
+          loaded.map((r) => {
+            const mine = isDirty(r.id) ? local.get(r.id) : undefined;
+            if (!mine) return r;
+            again.push(r.id);
+            return mine;
+          }),
+        );
+        if (again.length > 0) refetchRef.current(again);
+      } finally {
+        reloadingRef.current--;
       }
-      if (!mountedRef.current || seq !== recordsSeqRef.current) return;
-      commitRecords(() => loaded);
     },
     [adapter, commitRecords],
   );
@@ -313,7 +367,7 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
         added = [];
         return;
       }
-      if (flushing || phaseRef.current !== 'ready') {
+      if (flushing || reloadingRef.current > 0 || phaseRef.current !== 'ready') {
         scheduleFlush(BUSY_RETRY_MS);
         return;
       }
@@ -327,12 +381,14 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
 
       flushing = true;
       try {
-        // A view's filter cannot be evaluated locally, so new records in a filtered view need a reload.
+        // A view's filter cannot be evaluated locally: an added or changed record may enter or
+        // leave a filtered view, so the view is reloaded.
         const viewFiltered = Boolean(configRef.current?.sourceViewId);
-        if (ids.length > INCREMENTAL_LIMIT || (viewFiltered && order.length > 0)) {
+        if (ids.length > INCREMENTAL_LIMIT || (viewFiltered && ids.length > 0)) {
           await reloadRecords();
           return;
         }
+        const isDirty = markWrites(writesRef.current);
         const fetched = new Map<string, RecordData | null>();
         await Promise.all(
           ids.map(async (id) => {
@@ -344,14 +400,28 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
           }),
         );
         if (disposed) return;
+        // A snapshot read while this view was writing the record may miss that write: keep the
+        // local copy and read it again once the write has settled.
+        const again = ids.filter((id) => fetched.has(id) && isDirty(id));
+        for (const id of again) fetched.delete(id);
         // Without a source view, a modified record we do not know yet (e.g. created while
         // loading) belongs to the table, so it is appended too.
         const appendOrder = viewFiltered ? order : order.concat(ids.filter((id) => !order.includes(id)));
         commitRecords((prev) => mergeRecordChanges(prev, fetched, gone, appendOrder));
+        if (again.length > 0) refetch(again, BUSY_RETRY_MS);
       } finally {
         flushing = false;
       }
     };
+
+    const refetch = (recordIds: string[], delay: number) => {
+      for (const id of recordIds) {
+        deleted.delete(id);
+        changed.add(id);
+      }
+      scheduleFlush(delay);
+    };
+    refetchRef.current = (recordIds) => refetch(recordIds, RECORD_BATCH_MS);
 
     const offRecords = adapter.onRecordsChange((e) => {
       for (const id of e.recordIds) {
@@ -386,6 +456,7 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
 
     return () => {
       disposed = true;
+      refetchRef.current = () => undefined;
       if (recordTimer !== undefined) clearTimeout(recordTimer);
       if (fieldsTimer !== undefined) clearTimeout(fieldsTimer);
       for (const off of [offRecords, offFields, offConfig, offTheme]) {
@@ -472,17 +543,67 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
       if (keys.length === 0) return { ok: true };
       const recordId = p.rec.id;
       const before = recordsRef.current.find((r) => r.id === recordId)?.fields ?? p.rec.fields;
+      let state = writesRef.current.get(recordId);
+      if (!state) {
+        state = { seq: 0, inflight: new Set() };
+        writesRef.current.set(recordId, state);
+      }
+      state.seq++;
       commitRecords((prev) => prev.map((r) => (r.id === recordId ? { ...r, fields: { ...r.fields, ...patch } } : r)));
+      const call =
+        mode === 'cell' && keys.length === 1
+          ? adapter.setCell(recordId, keys[0], patch[keys[0]])
+          : adapter.setRecord(recordId, patch);
+      state.inflight.add(call);
       try {
-        if (mode === 'cell' && keys.length === 1) await adapter.setCell(recordId, keys[0], patch[keys[0]]);
-        else await adapter.setRecord(recordId, patch);
+        await call;
         return { ok: true };
       } catch (e) {
         commitRecords((prev) =>
-          prev.map((r) => (r.id === recordId ? { ...r, fields: restoreKeys(r.fields, before, keys) } : r)),
+          prev.map((r) => (r.id === recordId ? { ...r, fields: restoreKeys(r.fields, before, keys, patch) } : r)),
         );
+        // No host event follows a failed write: read the record again to pick up remote changes.
+        refetchRef.current([recordId]);
         return fail(p.t('common.error.writeFailed', { message: errorMessage(e) }));
+      } finally {
+        state.inflight.delete(call);
       }
+    };
+
+    /**
+     * Re-read the record before a transition, once this view's own writes to it have settled,
+     * so validation and the history line use the host's data rather than a possibly stale
+     * cache. Fails when someone else moved the record meanwhile.
+     */
+    const refresh = async (p: Prepared): Promise<Prepared | ActionResult> => {
+      const recordId = p.rec.id;
+      const pending = writesRef.current.get(recordId)?.inflight;
+      if (pending && pending.size > 0) await Promise.all([...pending].map((call) => call.catch(() => undefined)));
+      const isDirty = markWrites(writesRef.current);
+      let fresh: RecordData | null;
+      try {
+        fresh = await adapter.getRecord(recordId);
+      } catch (e) {
+        console.warn('[pipeline-view] could not re-read the record before a transition', e);
+        return p;
+      }
+      const cached = recordsRef.current.find((r) => r.id === recordId) ?? p.rec;
+      if (!fresh) return fail(p.t('common.error.recordNotFound'));
+      // Written again while reading (e.g. a field edited meanwhile): the local copy is newer.
+      if (isDirty(recordId)) return { ...p, rec: cached };
+      const latest = fresh;
+      commitRecords((prev) => mergeRecordChanges(prev, new Map([[recordId, latest]]), new Set(), []));
+      const stageFieldId = p.c.config.stageFieldId;
+      if (stageFieldId && getSelectId(latest.fields[stageFieldId]) !== getSelectId(p.rec.fields[stageFieldId])) {
+        return fail(p.t('common.error.recordChanged'));
+      }
+      return { ...p, rec: latest };
+    };
+
+    /** prepare() + refresh(). */
+    const prepareFresh = async (recordId: string): Promise<Prepared | ActionResult> => {
+      const p = prepare(recordId, true);
+      return isPrepared(p) ? refresh(p) : p;
     };
 
     const transition = (p: Prepared, kind: TransitionKind, toNodeId?: string): Promise<ActionResult> => {
@@ -498,7 +619,7 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
 
     return {
       async advance(recordId, toNodeId) {
-        const p = prepare(recordId, true);
+        const p = await prepareFresh(recordId);
         if (!isPrepared(p)) return p;
         const current = currentNodeId(p.tc, p.rec);
         if (current === null || !nextTargets(p.tc, p.rec).includes(toNodeId)) return fail(p.t('common.error.invalidTarget'));
@@ -508,14 +629,14 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
       },
 
       async rollback(recordId, toNodeId) {
-        const p = prepare(recordId, true);
+        const p = await prepareFresh(recordId);
         if (!isPrepared(p)) return p;
         if (!rollbackTargets(p.tc, p.rec).includes(toNodeId)) return fail(p.t('common.error.invalidTarget'));
         return transition(p, 'rollback', toNodeId);
       },
 
       async start(recordId, nodeId) {
-        const p = prepare(recordId, true);
+        const p = await prepareFresh(recordId);
         if (!isPrepared(p)) return p;
         if (currentNodeId(p.tc, p.rec) !== null) return fail(p.t('common.error.invalidTarget'));
         const target = nodeId ?? p.c.graph.roots[0];
@@ -524,7 +645,7 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
       },
 
       async complete(recordId) {
-        const p = prepare(recordId, true);
+        const p = await prepareFresh(recordId);
         if (!isPrepared(p)) return p;
         const current = currentNodeId(p.tc, p.rec);
         if (current === null || !p.c.graph.terminals.includes(current)) return fail(p.t('common.error.invalidTarget'));
@@ -545,6 +666,16 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
           const option = field.options?.find((o) => o.id === statusOptionId);
           if (!option) return fail(p.t('common.error.invalidTarget'));
           value = makeSelectValue(option);
+          // A done status at a terminal node finishes the record: same gate as complete().
+          const current = currentNodeId(p.tc, p.rec);
+          if (
+            current !== null &&
+            p.c.graph.terminals.includes(current) &&
+            getStatusCategory(p.c.config, statusOptionId) === 'done'
+          ) {
+            const v = validateNode(p.tc, p.rec, current);
+            if (v.missing.length > 0) return validationFailure(p, v);
+          }
         }
         return write(p, { [field.id]: value }, 'cell');
       },

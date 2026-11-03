@@ -93,6 +93,24 @@ export function makeUrlValue(link: string, text?: string): CellValue {
   return [{ type: 'url', text: text || href, link: href }];
 }
 
+/**
+ * True when a Text/Barcode/Url value holds more than the plain-text inline editors can write
+ * back: mention or link segments in text, a Url whose display text differs from its link, or
+ * several links. Such cells are edited in the host instead, so an edit never flattens them.
+ */
+export function hasRichText(field: FieldMeta, value: CellValue): boolean {
+  if (!field || !Array.isArray(value)) return false;
+  if (field.type === FieldType.Text || field.type === FieldType.Barcode) {
+    return value.some((item) => isObj(item) && typeof item.type === 'string' && item.type !== 'text');
+  }
+  if (field.type === FieldType.Url) {
+    if (value.length > 1) return true;
+    const seg = value[0];
+    return isObj(seg) && str(seg.text) !== '' && str(seg.text) !== str(seg.link);
+  }
+  return false;
+}
+
 const COMPUTED_TYPES = new Set<FieldType>([
   FieldType.Formula,
   FieldType.Lookup,

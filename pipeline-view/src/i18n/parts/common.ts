@@ -21,7 +21,7 @@ const common: DictPart = {
     'common.search.placeholder': 'Tìm bản ghi…',
     'common.filter.allStages': 'Tất cả các bước',
     'common.filter.notStarted': 'Chưa bắt đầu',
-    'common.filter.finished': 'Đã hoàn tất',
+    'common.filter.finished': 'Đã hoàn thành',
     'common.filter.allStatuses': 'Mọi trạng thái',
     'common.filter.stage': 'Bước',
     'common.filter.status': 'Trạng thái',
@@ -44,6 +44,7 @@ const common: DictPart = {
     'common.error.noDoneStatus': 'Chưa có trạng thái thuộc nhóm “Hoàn thành” để đánh dấu kết thúc. Hãy kiểm tra tab Trạng thái trong cài đặt.',
     'common.error.fieldNotWritable': 'Trường này không thể chỉnh sửa từ Pipeline View.',
     'common.error.notReady': 'Dữ liệu chưa sẵn sàng, vui lòng thử lại.',
+    'common.error.recordChanged': 'Bản ghi vừa được người khác chuyển bước. Hãy xem lại rồi thử lại.',
     'common.error.unknown': 'Lỗi không xác định',
 
     'common.empty.title': 'Biến bảng này thành một pipeline',
@@ -68,7 +69,7 @@ const common: DictPart = {
     'common.overview.total': 'Tổng',
     'common.overview.notStarted': 'Chưa bắt đầu',
     'common.overview.inProgress': 'Đang thực hiện',
-    'common.overview.finished': 'Đã hoàn tất',
+    'common.overview.finished': 'Đã hoàn thành',
     'common.overview.blocked': 'Bị chặn',
     'common.overview.node': 'Bước',
     'common.overview.count': 'Bản ghi',
@@ -118,6 +119,7 @@ const common: DictPart = {
     'common.error.noDoneStatus': 'There is no status in the “Done” category to mark the record finished. Check the Statuses tab in settings.',
     'common.error.fieldNotWritable': 'This field cannot be edited from Pipeline View.',
     'common.error.notReady': 'Data is not ready yet, please try again.',
+    'common.error.recordChanged': 'Someone else just moved this record. Check it and try again.',
     'common.error.unknown': 'Unknown error',
 
     'common.empty.title': 'Turn this table into a pipeline',

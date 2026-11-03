@@ -7,6 +7,7 @@ import {
   getMultiSelectIds,
   getSelectId,
   getUsers,
+  hasRichText,
   isComputedField,
   isEditableInline,
   makeSelectValue,
@@ -221,16 +222,47 @@ export function CellDisplay(props: { field: FieldMeta; value: CellValue; optionC
 /**
  * Local draft mirrored from the host value. While the input is focused the draft
  * is left alone so collaborator updates don't clobber what the user is typing.
+ * An edit is judged against the value at focus time: leaving the input without a
+ * change (or with Escape) writes nothing and picks up the current host value, so
+ * a collaborator's newer value is never overwritten with the stale one.
  */
 function useDraft<T>(external: T, syncKey: string) {
-  const [draft, setDraft] = useState<T>(external);
-  const focused = useRef(false);
+  const [draft, setDraftState] = useState<T>(external);
+  /** Latest draft, readable from handlers that run before the next render (blur after a change). */
+  const draftRef = useRef(draft);
   const latest = useRef(external);
   latest.current = external;
+  /** Set between focus and blur: the host value when editing started. */
+  const session = useRef<{ base: T; cancelled: boolean } | null>(null);
+  const setDraft = (value: T) => {
+    draftRef.current = value;
+    setDraftState(value);
+  };
   useEffect(() => {
-    if (!focused.current) setDraft(latest.current);
+    if (!session.current) setDraft(latest.current);
   }, [syncKey]);
-  return { draft, setDraft, focused };
+  return {
+    draft,
+    setDraft,
+    begin() {
+      session.current = { base: latest.current, cancelled: false };
+    },
+    /** Escape: the blur that follows commits nothing. */
+    cancel() {
+      if (session.current) session.current.cancelled = true;
+    },
+    /**
+     * End the edit. Returns the draft when `changed(draft, base)` says the user changed the
+     * value since focus; otherwise null, and the draft follows the host value again.
+     */
+    finish(changed: (draft: T, base: T) => boolean): { value: T } | null {
+      const current = session.current;
+      session.current = null;
+      if (current && !current.cancelled && changed(draftRef.current, current.base)) return { value: draftRef.current };
+      setDraft(latest.current);
+      return null;
+    },
+  };
 }
 
 interface EditorProps {
@@ -252,7 +284,7 @@ function statusOf(invalid: boolean | undefined): 'error' | 'default' {
 function TextEditor({ value, invalid, onCommit }: EditorProps): JSX.Element {
   const { t } = useI18n();
   const external = segmentsToText(value);
-  const { draft, setDraft, focused } = useDraft(external, external);
+  const { draft, setDraft, begin, cancel, finish } = useDraft(external, external);
   return (
     <TextArea
       value={draft}
@@ -261,16 +293,14 @@ function TextEditor({ value, invalid, onCommit }: EditorProps): JSX.Element {
       placeholder={t('detail.field.textPlaceholder')}
       validateStatus={statusOf(invalid)}
       onChange={(v) => setDraft(v)}
-      onFocus={() => {
-        focused.current = true;
-      }}
+      onFocus={begin}
       onBlur={() => {
-        focused.current = false;
-        if (draft !== external) onCommit(textToSegments(draft));
+        const edit = finish((next, base) => next !== base);
+        if (edit) onCommit(textToSegments(edit.value));
       }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
-          setDraft(external);
+          cancel();
           (e.target as HTMLTextAreaElement).blur();
         }
       }}
@@ -278,18 +308,44 @@ function TextEditor({ value, invalid, onCommit }: EditorProps): JSX.Element {
   );
 }
 
-function NumberEditor({ value, invalid, onCommit }: EditorProps): JSX.Element {
+function parseNumber(v: number | string | null | undefined): number | null {
+  return v === '' || v === null || v === undefined ? null : Number(v);
+}
+
+/** Rating bounds from the field property (`{min: 0|1, max}`), when present. */
+function ratingRange(field: FieldMeta): { min?: number; max?: number } {
+  const prop = field.property as { min?: unknown; max?: unknown } | null | undefined;
+  return {
+    min: typeof prop?.min === 'number' ? prop.min : undefined,
+    max: typeof prop?.max === 'number' ? prop.max : undefined,
+  };
+}
+
+/**
+ * Numbers as typed. Progress cells hold a fraction (0.5) that the rest of the UI shows
+ * as a percentage, so the editor shows and accepts percent too.
+ */
+function NumberEditor({ field, value, invalid, onCommit }: EditorProps): JSX.Element {
   const { t } = useI18n();
-  const external = typeof value === 'number' && Number.isFinite(value) ? value : null;
-  const { draft, setDraft, focused } = useDraft<number | string>(external ?? '', String(external));
+  const percent = field.type === FieldType.Progress;
+  const rating = field.type === FieldType.Rating ? ratingRange(field) : null;
+  const shown = (n: number) => (percent ? Number((n * 100).toFixed(4)) : n);
+  const stored = (n: number) => (percent ? Number((n / 100).toFixed(6)) : n);
+  const external = typeof value === 'number' && Number.isFinite(value) ? shown(value) : null;
+  const { draft, setDraft, begin, finish } = useDraft<number | string>(external ?? '', String(external));
   const commit = () => {
-    focused.current = false;
-    const parsed = draft === '' || draft === null || draft === undefined ? null : Number(draft);
-    if (parsed !== null && !Number.isFinite(parsed)) {
-      setDraft(external ?? '');
-      return;
+    const edit = finish((next, base) => {
+      const parsed = parseNumber(next);
+      return (parsed === null || Number.isFinite(parsed)) && parsed !== parseNumber(base);
+    });
+    if (!edit) return;
+    let parsed = parseNumber(edit.value);
+    if (parsed !== null && rating) {
+      parsed = Math.round(parsed);
+      if (rating.min !== undefined) parsed = Math.max(rating.min, parsed);
+      if (rating.max !== undefined) parsed = Math.min(rating.max, parsed);
     }
-    if (parsed !== external) onCommit(parsed);
+    onCommit(parsed === null ? null : stored(parsed));
   };
   return (
     <InputNumber
@@ -297,10 +353,12 @@ function NumberEditor({ value, invalid, onCommit }: EditorProps): JSX.Element {
       style={{ width: '100%' }}
       placeholder={t('detail.field.numberPlaceholder')}
       validateStatus={statusOf(invalid)}
+      suffix={percent ? '%' : undefined}
+      min={rating?.min}
+      max={rating?.max}
+      precision={rating ? 0 : undefined}
       onChange={(v) => setDraft(v)}
-      onFocus={() => {
-        focused.current = true;
-      }}
+      onFocus={begin}
       onBlur={commit}
       onEnterPress={blurOnEnter}
     />
@@ -453,11 +511,12 @@ function CheckboxEditor({ value, invalid, onCommit }: EditorProps): JSX.Element 
   );
 }
 
-function LineEditor(props: EditorProps & { kind: 'url' | 'phone' }): JSX.Element {
+/** One-line editors. Url writes a url segment; Phone and Email write a plain string (SDK 0.4.0 shapes). */
+function LineEditor(props: EditorProps & { kind: 'url' | 'phone' | 'email' }): JSX.Element {
   const { value, invalid, onCommit, kind } = props;
   const { t } = useI18n();
   const external = kind === 'url' ? urlOf(value) : typeof value === 'string' ? value : segmentsToText(value);
-  const { draft, setDraft, focused } = useDraft(external, external);
+  const { draft, setDraft, begin, finish } = useDraft(external, external);
   const safeLink = kind === 'url' && SAFE_LINK.test(draft.trim()) ? draft.trim() : null;
   let suffix: ReactNode = null;
   if (safeLink) {
@@ -470,17 +529,17 @@ function LineEditor(props: EditorProps & { kind: 'url' | 'phone' }): JSX.Element
   return (
     <Input
       value={draft}
-      placeholder={kind === 'url' ? 'https://' : t('detail.field.phonePlaceholder')}
+      placeholder={
+        kind === 'url' ? 'https://' : kind === 'email' ? t('detail.field.emailPlaceholder') : t('detail.field.phonePlaceholder')
+      }
       validateStatus={statusOf(invalid)}
       suffix={suffix}
       onChange={(v) => setDraft(v)}
-      onFocus={() => {
-        focused.current = true;
-      }}
+      onFocus={begin}
       onBlur={() => {
-        focused.current = false;
-        const next = draft.trim();
-        if (next === external) return;
+        const edit = finish((next, base) => next.trim() !== base);
+        if (!edit) return;
+        const next = edit.value.trim();
         onCommit(kind === 'url' ? makeUrlValue(next) : next || null);
       }}
       onEnterPress={blurOnEnter}
@@ -491,9 +550,10 @@ function LineEditor(props: EditorProps & { kind: 'url' | 'phone' }): JSX.Element
 function renderInlineEditor(p: EditorProps): JSX.Element | null {
   switch (p.field.type) {
     case FieldType.Text:
-    case FieldType.Email:
     case FieldType.Barcode:
       return <TextEditor {...p} />;
+    case FieldType.Email:
+      return <LineEditor {...p} kind="email" />;
     case FieldType.Number:
     case FieldType.Currency:
     case FieldType.Progress:
@@ -522,8 +582,8 @@ function renderInlineEditor(p: EditorProps): JSX.Element | null {
 
 /**
  * Inline editor for one cell. Types without an inline editor (users, attachments,
- * links, location…) render read-only with an "Edit in Lark" shortcut; computed
- * fields are always read-only.
+ * links, location…) and rich text (mentions, links) render read-only with an
+ * "Edit in Lark" shortcut; computed fields are always read-only.
  */
 export function FieldEditor(props: FieldEditorProps): JSX.Element {
   const { field, value, editable, invalid, optionColors, onCommit, onOpenHostEditor } = props;
@@ -543,8 +603,11 @@ export function FieldEditor(props: FieldEditorProps): JSX.Element {
     );
   }
 
+  // Mentions, links and link text cannot round-trip through the plain-text editors: edit those in Lark.
   const inline =
-    editable && isEditableInline(field) ? renderInlineEditor({ field, value, invalid, optionColors, onCommit }) : null;
+    editable && isEditableInline(field) && !hasRichText(field, value)
+      ? renderInlineEditor({ field, value, invalid, optionColors, onCommit })
+      : null;
   if (inline) return inline;
 
   return (

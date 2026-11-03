@@ -419,12 +419,14 @@ class LarkAdapter implements BaseAdapter {
     }
   }
 
+  /** null only when nothing is stored: a failed read must not look like "never configured". */
   async loadConfig(): Promise<unknown | null> {
     try {
       const value = await bitable.bridge.getData<unknown>(CONFIG_KEY);
       return value ?? null;
-    } catch {
-      return null;
+    } catch (e) {
+      if (isNotFound(e)) return null;
+      throw wrapError('Cannot read the pipeline settings', e);
     }
   }
 

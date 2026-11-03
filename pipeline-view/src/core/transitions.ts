@@ -13,7 +13,7 @@ import { cellToText, getSelectId, isCellEmpty, makeSelectValue, segmentsToText, 
 import { getDoneStatusId, getEntryStatusId, getNodeConfig } from './config';
 import { ancestors, topoOrder } from './graph';
 import { appendHistory, formatHistoryLine } from './history';
-import { getStatusCategory, readHistory, visitedNodeIds } from './state';
+import { getStatusCategory, readHistory, trustedVisited } from './state';
 
 export interface TransitionContext {
   config: PipelineConfig;
@@ -65,15 +65,15 @@ export function nextTargets(ctx: TransitionContext, record: RecordData): string[
  * Nodes the record may be sent back to: [] unless config.allowRollback. Otherwise the
  * strict ancestors of the current node, filtered to visited nodes when history is
  * configured and non-empty, ordered by topoOrder.
- * "Non-empty" means at least one history line could be parsed.
+ * "Non-empty" means at least one history line could be parsed; a log naming a node that no
+ * longer exists (renamed / deleted option) is not used for filtering (see trustedVisited).
  */
 export function rollbackTargets(ctx: TransitionContext, record: RecordData): string[] {
   if (!ctx.config.allowRollback) return [];
   const current = currentNodeId(ctx, record);
   if (current === null) return [];
   const candidates = ancestors(ctx.graph, current);
-  const history = readHistory(record, ctx.config);
-  const visited = history.length > 0 ? visitedNodeIds(ctx.graph, history) : null;
+  const visited = trustedVisited(ctx.graph, readHistory(record, ctx.config));
   return topoOrder(ctx.graph).filter((id) => candidates.has(id) && (visited === null || visited.has(id)));
 }
 

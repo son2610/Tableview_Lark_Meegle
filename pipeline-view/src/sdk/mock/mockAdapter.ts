@@ -246,10 +246,13 @@ class InMemoryAdapter implements MockAdapter {
     const invalid = () => new Error(`Invalid value for field "${field.name}"`);
     switch (field.type) {
       case FieldType.Text:
-      case FieldType.Email:
       case FieldType.Barcode:
         if (typeof value === 'string') return value === '' ? null : [{ type: 'text', text: value }];
         if (Array.isArray(value)) return value.length === 0 ? null : value;
+        throw invalid();
+      case FieldType.Email:
+        // IEmailField is a plain string in SDK 0.4.0 (its transform is the identity).
+        if (typeof value === 'string') return value === '' ? null : value;
         throw invalid();
       case FieldType.Number:
       case FieldType.Currency:

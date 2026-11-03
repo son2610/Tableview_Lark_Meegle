@@ -60,7 +60,7 @@ export interface BaseAdapter {
   /** Append an option to a select field; returns the new option id. */
   addSelectOption(fieldId: string, name: string, color?: number): Promise<string>;
 
-  /** Raw stored config (unvalidated) or null when never saved. */
+  /** Raw stored config (unvalidated) or null when never saved. Rejects when the read fails. */
   loadConfig(): Promise<unknown | null>;
   saveConfig(config: unknown): Promise<void>;
   /** Fires when the stored config changes (e.g. another collaborator saved settings). */

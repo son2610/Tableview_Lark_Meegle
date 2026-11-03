@@ -255,6 +255,16 @@ describe('mock adapter', () => {
     await expect(adapter.getRecord('recPv03Dark')).resolves.toEqual(before);
   });
 
+  it('stores Email cells as plain strings, like IEmailField in SDK 0.4.0', async () => {
+    const adapter = createMockAdapter(fast());
+    const email = await adapter.addField({ name: 'Contact email', type: FieldType.Email });
+    await adapter.setCell('recPv10Paus', email, 'an@example.com');
+    expect((await adapter.getRecord('recPv10Paus'))?.fields[email]).toBe('an@example.com');
+    await expect(adapter.setCell('recPv10Paus', email, [{ type: 'text', text: 'x@y.z' }])).rejects.toThrow(/Invalid value/);
+    await adapter.setCell('recPv10Paus', email, '');
+    expect((await adapter.getRecord('recPv10Paus'))?.fields[email]).toBeUndefined();
+  });
+
   it('serves the demo config by default and null for preset=none', async () => {
     await expect(createMockAdapter(fast()).loadConfig()).resolves.toEqual(DEMO_CONFIG);
     await expect(createMockAdapter(fast('preset=none')).loadConfig()).resolves.toBeNull();
@@ -599,7 +609,10 @@ describe('lark adapter (fake SDK)', () => {
   it('loads config safely and filters data-change events by key', async () => {
     const { table } = fakeTable();
     const { adapter } = await larkWith(table);
-    sdk.bridge.getData = vi.fn().mockRejectedValue(new Error('x'));
+    // A failed read is not "never saved": it must surface instead of resetting to defaults.
+    sdk.bridge.getData = vi.fn().mockRejectedValue(new Error('timeout'));
+    await expect(adapter.loadConfig()).rejects.toThrow('Cannot read the pipeline settings: timeout');
+    sdk.bridge.getData = vi.fn().mockRejectedValue({ code: 10289998, message: 'key not found' });
     await expect(adapter.loadConfig()).resolves.toBeNull();
     sdk.bridge.getData = vi.fn(async () => undefined);
     await expect(adapter.loadConfig()).resolves.toBeNull();

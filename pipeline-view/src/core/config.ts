@@ -41,7 +41,9 @@ export function createDefaultConfig(fields: FieldMeta[]): PipelineConfig {
  *   entryStatusId dropped when not a current status option; description kept when a
  *   non-empty string. No stage field -> nodes {}.
  * - edges: if not null, keep only edges between current stage options, no duplicates /
- *   self loops. (A stored empty array stays [] – the user removed all edges on purpose.)
+ *   self loops; an edge into a removed option is bridged to the surviving options after it
+ *   (A→B→C with B deleted becomes A→C). (A stored empty array stays [] – the user removed
+ *   all edges on purpose.)
  *   Missing / non-array edges, or no stage field -> null (linear).
  * - statusCategories: keep known options, guess categories for new ones, drop stale ids.
  * - defaultEntryStatusId must be a current status option, else re-derived.
@@ -287,17 +289,49 @@ function repairNode(raw: unknown, byId: Map<string, FieldMeta>, statusIds: Set<s
   return node;
 }
 
+/**
+ * Edges between current stage options. An edge into an option that no longer exists is
+ * bridged to the surviving options reached through removed ones, so deleting a middle node
+ * (A→B→C with B deleted) keeps A→C instead of splitting the pipeline.
+ */
 function repairEdges(raw: unknown[], stageOptions: SelectOption[]): Edge[] {
   const ids = new Set(stageOptions.map((o) => o.id));
+  const valid: Edge[] = [];
+  const successors = new Map<string, string[]>();
+  for (const e of raw) {
+    if (!isPlainObject(e) || typeof e.from !== 'string' || typeof e.to !== 'string' || e.from === e.to) continue;
+    valid.push({ from: e.from, to: e.to });
+    successors.set(e.from, [...(successors.get(e.from) ?? []), e.to]);
+  }
+
+  /** Surviving options reachable from the removed option `id` through removed options only. */
+  const survivorsAfter = (id: string): string[] => {
+    const found: string[] = [];
+    const seen = new Set([id]);
+    const queue = [id];
+    while (queue.length > 0) {
+      for (const next of successors.get(queue.shift() as string) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        if (ids.has(next)) found.push(next);
+        else queue.push(next);
+      }
+    }
+    return found;
+  };
+
   const seen = new Set<string>();
   const edges: Edge[] = [];
-  for (const e of raw) {
-    if (!isPlainObject(e) || typeof e.from !== 'string' || typeof e.to !== 'string') continue;
-    if (e.from === e.to || !ids.has(e.from) || !ids.has(e.to)) continue;
-    const key = `${e.from}\u0000${e.to}`;
-    if (seen.has(key)) continue;
+  const add = (from: string, to: string) => {
+    const key = `${from}\u0000${to}`;
+    if (from === to || seen.has(key)) return;
     seen.add(key);
-    edges.push({ from: e.from, to: e.to });
+    edges.push({ from, to });
+  };
+  for (const e of valid) {
+    if (!ids.has(e.from)) continue;
+    if (ids.has(e.to)) add(e.from, e.to);
+    else for (const to of survivorsAfter(e.to)) add(e.from, to);
   }
   return edges;
 }

@@ -28,7 +28,8 @@ const BASE: CSSProperties = {
   alignItems: 'center',
   maxWidth: '100%',
   minWidth: 0,
-  lineHeight: 1,
+  // Room for descenders and stacked Vietnamese diacritics: the inner span clips (ellipsis).
+  lineHeight: 1.5,
   fontWeight: 500,
   whiteSpace: 'nowrap',
   overflow: 'hidden',

@@ -51,18 +51,24 @@ export function newFieldConfig(role: CreatableRole, t: TFunc, fields: FieldMeta[
   }
 }
 
-/** Draft after picking a (possibly just created) field for a role. */
-function assignRole(draft: PipelineConfig, role: CreatableRole, id: string | undefined): PipelineConfig {
+/**
+ * Draft after picking a (possibly just created) field for a role. `saved` is the stored
+ * config: switching the stage field back to the saved one restores its node rules and edges.
+ */
+function assignRole(draft: PipelineConfig, role: CreatableRole, id: string | undefined, saved: PipelineConfig): PipelineConfig {
   switch (role) {
-    case 'stage':
-      // Nodes and edges belong to the old field's options.
+    case 'stage': {
+      if (id === draft.stageFieldId) return draft;
+      // Nodes and edges belong to the stage field's options.
+      const restore = id !== undefined && id === saved.stageFieldId;
       return {
         ...draft,
         stageFieldId: id,
         statusFieldId: draft.statusFieldId === id ? undefined : draft.statusFieldId,
-        edges: null,
-        nodes: {},
+        edges: restore ? saved.edges : null,
+        nodes: restore ? saved.nodes : {},
       };
+    }
     case 'status':
       return { ...draft, statusFieldId: id };
     case 'enteredAt':
@@ -88,7 +94,7 @@ export function FieldsTab({ ctx, draft, update, views, createField }: FieldsTabP
 
   /** Existing fields: normalize so status categories / entry statuses follow the new field. */
   const pick = (role: CreatableRole, id: string | undefined) =>
-    update((d) => normalizeConfig(assignRole(d, role, id), ctx.fields));
+    update((d) => normalizeConfig(assignRole(d, role, id, ctx.config), ctx.fields));
 
   const create = async (role: CreatableRole) => {
     const cfg = newFieldConfig(role, t, ctx.fields);
@@ -101,7 +107,7 @@ export function FieldsTab({ ctx, draft, update, views, createField }: FieldsTabP
     }
     Toast.success(t('settings.fields.created', { name: cfg.name }));
     // Not normalized here: this render's field list does not contain the new field yet.
-    update((d) => assignRole(d, role, id));
+    update((d) => assignRole(d, role, id, ctx.config));
   };
 
   const createButton = (role: CreatableRole, value: string | undefined) =>
