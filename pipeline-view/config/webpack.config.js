@@ -88,7 +88,15 @@ const config = {
         hot: true,
         port: isMock ? 5180 : undefined,
         open: false,
-        client: { logging: 'error', overlay: { errors: true, warnings: false } },
+        client: {
+          logging: 'error',
+          overlay: {
+            errors: true,
+            warnings: false,
+            // Benign browser notice triggered by Semi's autosizing TextArea; not an app error.
+            runtimeErrors: (error) => !/ResizeObserver loop/.test(error?.message || ''),
+          },
+        },
         setupMiddlewares: (middlewares, devServer) => {
           if (!devServer || !devServer.app) throw new Error('webpack-dev-server is not defined');
           if (larkUtils) middlewares.push(larkUtils.opdevMiddleware(devServer));

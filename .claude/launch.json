@@ -4,7 +4,7 @@
     {
       "name": "pipeline-demo",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "demo"],
+      "runtimeArgs": ["--prefix", "pipeline-view", "run", "demo"],
       "port": 5180
     }
   ]
