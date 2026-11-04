@@ -20,3 +20,7 @@
 - For UI checks in the in-app browser pane, drive and assert through `javascript_tool` (DOM + `window.__pvMock`)
   instead of coordinates: emulated viewports are scaled into a smaller click frame and the pane width can
   change mid-test.
+- Webpack `cache.name` must differ per mode: a dev build restoring a production cache (MiniCssExtractPlugin entries)
+  prints thousands of "Restoring failed ... CssDependency" warnings that look like an infinite loop. Also set
+  `infrastructureLogging.level = 'error'`: tracing build deps through @lark-opdev/cli floods harmless cache warnings
+  on every fresh cache. Why: the user read the flood as a hang.

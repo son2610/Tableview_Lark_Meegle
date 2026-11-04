@@ -21,6 +21,9 @@ const config = {
   devtool: isProduction ? false : 'inline-source-map',
   mode: isDevelopment ? 'development' : 'production',
   stats: 'errors-warnings',
+  // Tracing build dependencies through @lark-opdev/cli emits thousands of harmless cache
+  // warnings ("doesn't lead to expected result") whenever a cache is created.
+  infrastructureLogging: { level: 'error' },
   output: {
     path: path.resolve(__dirname, isMock ? '../dist-demo' : '../dist'),
     clean: true,
@@ -105,7 +108,9 @@ const config = {
       },
   cache: {
     type: 'filesystem',
-    name: isMock ? 'mock' : 'lark',
+    // One cache per target+mode: a production cache (MiniCssExtractPlugin entries) cannot be
+    // restored by a development build and would flood the console with "Restoring failed".
+    name: `${isMock ? 'mock' : 'lark'}-${isProduction ? 'production' : 'development'}`,
     buildDependencies: { config: [__filename] },
   },
 };
