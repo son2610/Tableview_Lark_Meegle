@@ -1,0 +1,15 @@
+{
+  "name": "lark-pipeline-view-workspace",
+  "private": true,
+  "description": "Forwards scripts to ./pipeline-view so they can be run from the repository root",
+  "scripts": {
+    "setup": "npm --prefix pipeline-view install",
+    "dev": "npm --prefix pipeline-view run dev",
+    "start": "npm --prefix pipeline-view run dev",
+    "demo": "npm --prefix pipeline-view run demo",
+    "build": "npm --prefix pipeline-view run build",
+    "upload": "npm --prefix pipeline-view run upload",
+    "test": "npm --prefix pipeline-view test",
+    "typecheck": "npm --prefix pipeline-view run typecheck"
+  }
+}
