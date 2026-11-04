@@ -12,6 +12,7 @@ const detail: DictPart = {
     'detail.state.active': 'Bước hiện tại',
     'detail.state.pending': 'Chưa tới',
     'detail.state.skipped': 'Đã bỏ qua',
+    'detail.state.unknown': 'Không rõ',
 
     'detail.graph.title': 'Quy trình',
     'detail.graph.empty': 'Trường giai đoạn chưa có lựa chọn nào. Hãy thêm bước trong Cài đặt.',
@@ -19,6 +20,17 @@ const detail: DictPart = {
     'detail.legend.done': 'Đã xong',
     'detail.legend.current': 'Hiện tại',
     'detail.legend.pending': 'Chưa tới',
+    'detail.legend.skipped': 'Đã bỏ qua',
+    'detail.legend.unknown': 'Không rõ',
+    'detail.graph.unknownState': 'Không rõ đã qua hay chưa',
+    'detail.graph.skippedState': 'Đã bỏ qua – bản ghi không đi qua bước này',
+    'detail.graph.unknownHint.setup':
+      'Chưa biết bản ghi đã đi nhánh nào. Hãy chọn trường “Các bước đã qua” (hoặc trường lịch sử) trong Cài đặt → Trường để theo dõi chính xác các nhánh.',
+    'detail.graph.unknownHint.setupPath':
+      'Chưa biết bản ghi đã đi nhánh nào. Hãy chọn trường “Các bước đã qua” trong Cài đặt → Trường, rồi tích các bước đã đi để hiện đúng nhánh.',
+    'detail.graph.unknownHint.backfill':
+      'Chưa rõ bản ghi này đã đi nhánh nào. Tích các bước nó đã đi qua trong trường “{field}” để hiện đúng nhánh.',
+    'detail.graph.unknownHint.tick': 'Tích các bước đã qua',
 
     'detail.header.openRecord': 'Mở bản ghi trong Lark',
     'detail.header.enteredAt': 'Ở bước hiện tại từ {date}',
@@ -49,6 +61,7 @@ const detail: DictPart = {
     'detail.node.notice.pending': 'Chưa tới bước này.',
     'detail.node.notice.done': 'Bước này đã hoàn thành.',
     'detail.node.notice.skipped': 'Bước này đã bị bỏ qua.',
+    'detail.node.notice.unknown': 'Không rõ bản ghi đã đi qua bước này hay chưa.',
     'detail.node.notice.active': 'Đây là bước hiện tại.',
     'detail.node.notice.editAhead': 'Bạn vẫn có thể nhập trước thông tin.',
 
@@ -97,6 +110,7 @@ const detail: DictPart = {
     'detail.state.active': 'Current step',
     'detail.state.pending': 'Not reached',
     'detail.state.skipped': 'Skipped',
+    'detail.state.unknown': 'Unknown',
 
     'detail.graph.title': 'Pipeline',
     'detail.graph.empty': 'The stage field has no options yet. Add steps in Settings.',
@@ -104,6 +118,17 @@ const detail: DictPart = {
     'detail.legend.done': 'Done',
     'detail.legend.current': 'Current',
     'detail.legend.pending': 'Not reached',
+    'detail.legend.skipped': 'Skipped',
+    'detail.legend.unknown': 'Unknown',
+    'detail.graph.unknownState': 'Not known whether this step was passed',
+    'detail.graph.skippedState': 'Skipped – the record did not go through this step',
+    'detail.graph.unknownHint.setup':
+      'Which branch this record took is unknown. Choose a “Steps passed” field (or a history field) in Settings → Fields to track branches precisely.',
+    'detail.graph.unknownHint.setupPath':
+      'Which branch this record took is unknown. Choose a “Steps passed” field in Settings → Fields, then tick the steps it went through.',
+    'detail.graph.unknownHint.backfill':
+      'Which branch this record took is not recorded. Tick the steps it went through in “{field}” to show it.',
+    'detail.graph.unknownHint.tick': 'Tick the steps passed',
 
     'detail.header.openRecord': 'Open record in Lark',
     'detail.header.enteredAt': 'In the current step since {date}',
@@ -134,6 +159,7 @@ const detail: DictPart = {
     'detail.node.notice.pending': 'Not reached yet.',
     'detail.node.notice.done': 'This step is completed.',
     'detail.node.notice.skipped': 'This step was skipped.',
+    'detail.node.notice.unknown': 'It is not known whether the record went through this step.',
     'detail.node.notice.active': 'This is the current step.',
     'detail.node.notice.editAhead': 'You can still fill in its information ahead of time.',
 

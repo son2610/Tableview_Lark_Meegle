@@ -141,6 +141,38 @@ export function descendants(graph: PipelineGraph, nodeId: string): Set<string> {
   return reach(graph.successors, nodeId);
 }
 
+const dominatorCache = new WeakMap<PipelineGraph, Map<string, Set<string>>>();
+
+/**
+ * Nodes (excluding `nodeId`) that lie on EVERY path from any root to `nodeId`: removing one of
+ * them makes `nodeId` unreachable from all roots. These are the steps a record at `nodeId` must
+ * have passed, whichever branch it took. Empty for roots, unknown ids and nodes no root leads to
+ * (nothing can be inferred then). Safe on cyclic graphs; the result is in option order.
+ * O(V·(V+E)), memoized per graph object (graphs are never mutated once built), since the
+ * record list computes it for every record.
+ */
+export function dominators(graph: PipelineGraph, nodeId: string): Set<string> {
+  let byNode = dominatorCache.get(graph);
+  if (!byNode) {
+    byNode = new Map();
+    dominatorCache.set(graph, byNode);
+  }
+  let found = byNode.get(nodeId);
+  if (!found) {
+    found = new Set<string>();
+    if (graph.nodeById.has(nodeId) && reachableFromRoots(graph, nodeId, null)) {
+      const candidates = ancestors(graph, nodeId);
+      for (const node of graph.nodes) {
+        if (candidates.has(node.id) && !reachableFromRoots(graph, nodeId, node.id)) found.add(node.id);
+      }
+    }
+    byNode.set(nodeId, found);
+  }
+  // A copy, so callers may change it without corrupting the cache.
+  return new Set(found);
+}
+
+
 /**
  * Node ids in a topological order that is stable w.r.t. option order
  * (Kahn's algorithm picking the smallest option index first). Nodes on cycles
@@ -185,6 +217,21 @@ function reach(adjacency: Map<string, string[]>, nodeId: string): Set<string> {
     }
   }
   return result;
+}
+
+/** True when `target` can be reached from a root without passing through `removed`. */
+function reachableFromRoots(graph: PipelineGraph, target: string, removed: string | null): boolean {
+  const queue = graph.roots.filter((id) => id !== removed);
+  const seen = new Set<string>(queue);
+  for (let i = 0; i < queue.length; i++) {
+    if (queue[i] === target) return true;
+    for (const next of graph.successors.get(queue[i]) ?? []) {
+      if (next === removed || seen.has(next)) continue;
+      seen.add(next);
+      queue.push(next);
+    }
+  }
+  return false;
 }
 
 function insertSorted(list: string[], id: string, indexOf: (id: string) => number): void {

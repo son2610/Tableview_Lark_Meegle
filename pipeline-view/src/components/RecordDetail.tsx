@@ -4,11 +4,13 @@ import {
   IconAlertTriangle,
   IconChevronDown,
   IconExternalOpen,
+  IconInfoCircle,
   IconPlus,
   IconTick,
   IconTickCircle,
 } from '@douyinfe/semi-icons';
 import { cellToText, formatDateTime, formatDuration, getSelectId, getUsers } from '../core/cell';
+import { getPathField } from '../core/path';
 import { computeNodeStates, getEnteredAt } from '../core/state';
 import { requiredProgress } from '../core/transitions';
 import type { ActionResult, FieldMeta, PipelineActions, PipelineContextValue, RecordData } from '../types';
@@ -131,6 +133,9 @@ export function RecordDetail(props: RecordDetailProps): JSX.Element {
   );
   const tctx = useMemo(() => makeTransitionContext(ctx), [ctx]);
   const current = nodeStates.current;
+  const hasUnknown = useMemo(() => [...nodeStates.states.values()].includes('unknown'), [nodeStates]);
+  const hasSkipped = useMemo(() => [...nodeStates.states.values()].includes('skipped'), [nodeStates]);
+  const pathField = getPathField(config, fieldById);
 
   const panelNodeId =
     (selectedNodeId && graph.nodeById.has(selectedNodeId) ? selectedNodeId : null) ??
@@ -327,6 +332,18 @@ export function RecordDetail(props: RecordDetailProps): JSX.Element {
                 <i className="pv-rd-legend__dot is-pending" />
                 {t('detail.legend.pending')}
               </span>
+              {hasSkipped ? (
+                <span className="pv-rd-legend__item">
+                  <i className="pv-rd-legend__dot is-skipped" />
+                  {t('detail.legend.skipped')}
+                </span>
+              ) : null}
+              {hasUnknown ? (
+                <span className="pv-rd-legend__item">
+                  <i className="pv-rd-legend__dot is-unknown" />
+                  {t('detail.legend.unknown')}
+                </span>
+              ) : null}
             </div>
           </div>
           {nodeStates.unknownStageText ? (
@@ -352,6 +369,32 @@ export function RecordDetail(props: RecordDetailProps): JSX.Element {
               />
             </div>
           )}
+          {hasUnknown && editable ? (
+            // Which branch was taken is unknown: say how to record it (the path field, or ticking it for this record).
+            <div className="pv-rd-flow__hint">
+              <IconInfoCircle className="pv-rd-flow__hint-icon" size="small" />
+              {pathField ? (
+                <>
+                  <span>{t('detail.graph.unknownHint.backfill', { field: pathField.name })}</span>
+                  <button
+                    type="button"
+                    className="pv-rd-flow__hint-action"
+                    onClick={() => void actions.editField(record.id, pathField.id)}
+                  >
+                    {t('detail.graph.unknownHint.tick')}
+                  </button>
+                </>
+              ) : (
+                <span>
+                  {t(
+                    config.historyFieldId && fieldById.has(config.historyFieldId)
+                      ? 'detail.graph.unknownHint.setupPath'
+                      : 'detail.graph.unknownHint.setup',
+                  )}
+                </span>
+              )}
+            </div>
+          ) : null}
         </section>
 
         {panelNodeId ? (

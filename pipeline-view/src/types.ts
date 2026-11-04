@@ -147,6 +147,14 @@ export interface PipelineConfig {
   enteredAtFieldId?: string;
   /** Optional Text field the plugin appends a transition log line to on every stage change. */
   historyFieldId?: string;
+  /**
+   * Optional MultiSelect field ("Steps passed") whose selected options are the steps the record
+   * went through. Options match nodes by name (trimmed, Unicode NFC); options that match no node
+   * are the user's own data and are always preserved. The plugin updates it on every transition
+   * (start / advance / rollback / complete) and users may tick it by hand for older records.
+   * When a record's value names at least one node it decides which branch was taken.
+   */
+  pathFieldId?: string;
   /** Optional Grid view whose filter/sort defines which records are shown. Empty = all records. */
   sourceViewId?: string;
   /** statusOptionId -> category. */
@@ -232,9 +240,22 @@ export interface GraphLayout {
  *           current node itself when it is terminal and its status is 'done')
  * active  – the current node (not yet done)
  * pending – not reached yet
- * skipped – an ancestor of the current node that history proves was never visited
+ * skipped – an ancestor of the current node that the path field / history proves was never visited
+ * unknown – an ancestor of the current node that may or may not have been visited: the path field /
+ *           history say nothing about it (no record, before a gap in the ticked route or a log that
+ *           starts mid-way, or no option for it in the path field) and it is not on every route to
+ *           a step known reached
  */
-export type NodeState = 'done' | 'active' | 'pending' | 'skipped';
+export type NodeState = 'done' | 'active' | 'pending' | 'skipped' | 'unknown';
+
+/**
+ * Where a record's visited steps come from:
+ * path     – the "Steps passed" MultiSelect field (config.pathFieldId) names at least one node;
+ * history  – the history log (config.historyFieldId) names at least one current node (a log
+ *            without a "▶" start line only covers the steps from its first logged node on);
+ * inferred – neither: only nodes on every route to the current node (dominators) are known done.
+ */
+export type VisitSource = 'path' | 'history' | 'inferred';
 
 export interface RecordNodeStates {
   /** Current stage option id, or null when the stage cell is empty / refers to an unknown option. */
@@ -245,8 +266,13 @@ export interface RecordNodeStates {
   currentCategory: StatusCategory | null;
   /** State for every node in the graph. */
   states: Map<string, NodeState>;
-  /** Node ids that the history log shows were entered at some point. */
+  /**
+   * Node ids known to have been entered: the path field's nodes plus the current node when
+   * visitSource is 'path', else the nodes named in the history log (possibly empty).
+   */
   visited: Set<string>;
+  /** Which information decided the done / skipped / unknown states of the ancestors. */
+  visitSource: VisitSource;
   /** True when the record sits at a terminal node whose status category is 'done'. */
   finished: boolean;
 }

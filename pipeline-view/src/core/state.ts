@@ -7,10 +7,12 @@ import type {
   RecordData,
   RecordNodeStates,
   StatusCategory,
+  VisitSource,
 } from '../types';
 import { cellToText, getSelectId, segmentsToText } from './cell';
-import { ancestors } from './graph';
+import { ancestors, dominators } from './graph';
 import { parseHistory } from './history';
+import { pathCoverage, readPathCell } from './path';
 
 /** Category of a status option id under the config (null when unknown / no id). */
 export function getStatusCategory(config: PipelineConfig, statusOptionId: string | null | undefined): StatusCategory | null {
@@ -22,14 +24,20 @@ export function getStatusCategory(config: PipelineConfig, statusOptionId: string
  * Per-record node states.
  * - current = stage option id of the record if it is a graph node, else null
  *   (unknownStageText set when the cell has a value that is not a node).
- * - visited = node ids whose NAME appears as `from`/`to` of a parsed history entry
- *   (history read from config.historyFieldId, if configured).
+ * - What is known about the visited steps comes from readVisits: the path field when it names
+ *   a node ('path'), else the history log ('history'), else only the graph itself ('inferred').
  * - For every node:
  *   current node -> 'done' if it is terminal and currentCategory === 'done' (finished), else 'active';
- *   strict ancestor of current -> 'done' when history is empty/unconfigured/ambiguous (see
- *                                 trustedVisited) or the node is visited, 'skipped' otherwise;
+ *   strict ancestor of current -> 'done' when known visited or certain (on every route to a
+ *                                 step known passed: a dominator); 'unknown' when the source says
+ *                                 nothing about it (no path / history, before a log that starts
+ *                                 mid-way, before a gap in the ticked steps, or a step the path
+ *                                 field has no option for); else 'skipped' (the source covers it
+ *                                 and it was not passed) — so a linear pipeline without any record
+ *                                 of visits is all done;
  *   everything else -> 'pending'.
  * - When current is null every node is 'pending'.
+ * - visited = path nodes plus the current node for 'path', else the nodes named in the history log.
  * "Empty history" means no line of the history cell could be parsed. Names are compared
  * trimmed; every node carrying a logged name counts as visited.
  */
@@ -53,9 +61,7 @@ export function computeNodeStates(
     ? getStatusCategory(config, getSelectId(record.fields[config.statusFieldId]))
     : null;
 
-  const history = readHistory(record, config);
-  const visited = visitedNodeIds(graph, history);
-  const trusted = trustedVisited(graph, history);
+  const visits = readVisits(graph, record, config, fieldById);
   const finished =
     current !== null && (graph.successors.get(current) ?? []).length === 0 && currentCategory === 'done';
 
@@ -64,13 +70,94 @@ export function computeNodeStates(
   for (const node of graph.nodes) {
     let state: NodeState = 'pending';
     if (node.id === current) state = finished ? 'done' : 'active';
-    else if (before.has(node.id)) state = trusted === null || trusted.has(node.id) ? 'done' : 'skipped';
+    else if (before.has(node.id)) {
+      if (visits.visited.has(node.id) || visits.certain.has(node.id)) state = 'done';
+      else if (visits.uncovered.has(node.id)) state = 'unknown';
+      else state = 'skipped';
+    }
     states.set(node.id, state);
   }
 
-  const result: RecordNodeStates = { current, currentCategory, states, visited, finished };
+  const visited = new Set(visits.visited);
+  if (visits.source === 'path' && current !== null) visited.add(current);
+
+  const result: RecordNodeStates = { current, currentCategory, states, visited, visitSource: visits.source, finished };
   if (unknownStageText !== undefined) result.unknownStageText = unknownStageText;
   return result;
+}
+
+/** What is known about the steps a record went through (see readVisits). */
+export interface RecordVisits {
+  source: VisitSource;
+  /** Nodes known to have been visited. */
+  visited: Set<string>;
+  /**
+   * Nodes the source says nothing about. Any other node that is in neither `visited` nor
+   * `certain` is known NOT to have been visited (in the current run).
+   */
+  uncovered: Set<string>;
+  /** Nodes visited all the same: they lie on every route to a node known to have been reached. */
+  certain: Set<string>;
+}
+
+/**
+ * What is known about the steps a record went through, from the first available source:
+ * - 'path': the configured path field (MultiSelect, still present in `fieldById`) names at least
+ *   one node. visited = those nodes (options naming no node are ignored); uncovered / certain as
+ *   pathCoverage explains: the steps before a gap in the ticked route, and those the field has no
+ *   option for, are uncovered; the steps on every route to the current node or to a ticked step
+ *   are certain.
+ * - 'history': the history log names at least one current node. visited = the logged nodes.
+ *   A log with a start line ("▶") covers everything. A log without one began mid-way (the field
+ *   was added later, or old lines were trimmed): it covers only its first logged node (the target
+ *   when the first line is a rollback: the run restarts there) and what comes after it, so the
+ *   ancestors of that node are uncovered. A log naming a node that no
+ *   longer exists (renamed / deleted option) proves visits but nothing skipped: the ancestors of
+ *   the current node are uncovered.
+ * - 'inferred': otherwise; nothing visited, the ancestors of the current node are uncovered.
+ * For 'history' / 'inferred', certain = the dominators of the node the uncovered part leads to
+ * (the first logged node, or the current node).
+ */
+export function readVisits(
+  graph: PipelineGraph,
+  record: RecordData,
+  config: PipelineConfig,
+  fieldById: Map<string, FieldMeta>,
+): RecordVisits {
+  const none = new Set<string>();
+  const stageId = config.stageFieldId ? getSelectId(record.fields[config.stageFieldId]) : null;
+  const current = stageId !== null && graph.nodeById.has(stageId) ? stageId : null;
+
+  const path = readPathCell(graph, record, config, fieldById);
+  if (path && path.ticked.size > 0) {
+    const coverage = current === null ? { uncovered: none, certain: none } : pathCoverage(graph, current, path.ticked, path.noOption);
+    return { source: 'path', visited: path.ticked, ...coverage };
+  }
+
+  const history = readHistory(record, config);
+  const visited = visitedNodeIds(graph, history);
+  // Before `anchor` only the graph tells what was visited; from it on, the log is complete.
+  let anchor = current;
+  if (visited.size > 0 && trustedVisited(graph, history) !== null) {
+    if (history.some((e) => e.kind === 'start')) return { source: 'history', visited, uncovered: none, certain: none };
+    anchor = firstLoggedNode(graph, history) ?? current;
+  }
+  return {
+    source: visited.size > 0 ? 'history' : 'inferred',
+    visited,
+    uncovered: anchor === null ? none : ancestors(graph, anchor),
+    certain: anchor === null ? none : dominators(graph, anchor),
+  };
+}
+
+/**
+ * Node of the first logged step: the `from` of an advance, the target of a rollback (the run
+ * restarts there, and the log covers it from then on), the node of a "✓" line.
+ */
+function firstLoggedNode(graph: PipelineGraph, history: HistoryEntry[]): string | null {
+  const first = history[0];
+  const name = ((first?.kind === 'advance' ? first.from : first?.to) ?? '').trim();
+  return graph.nodes.find((n) => n.name.trim() === name)?.id ?? null;
 }
 
 /** ms timestamp from config.enteredAtFieldId, or null. */

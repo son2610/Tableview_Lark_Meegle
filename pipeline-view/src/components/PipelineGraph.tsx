@@ -112,7 +112,13 @@ export function PipelineGraph(props: PipelineGraphProps): JSX.Element {
   const describe = (node: PipelineNode, state: NodeState | undefined, count: number | undefined): string => {
     if (isRecord && state) {
       const badge = badges?.get(node.id);
-      return `${node.name} – ${t(`detail.state.${state}`)}${badge ? ` (${badge})` : ''}`;
+      const label =
+        state === 'unknown'
+          ? t('detail.graph.unknownState')
+          : state === 'skipped'
+            ? t('detail.graph.skippedState')
+            : t(`detail.state.${state}`);
+      return `${node.name} – ${label}${badge ? ` (${badge})` : ''}`;
     }
     if (mode === 'overview') return `${node.name} – ${t('detail.graph.countAria', { count: count ?? 0 })}`;
     return node.name;
@@ -157,6 +163,8 @@ export function PipelineGraph(props: PipelineGraphProps): JSX.Element {
           ]
             .filter(Boolean)
             .join(' ');
+          // Unknown and skipped steps explain themselves on hover; the others only need their (possibly truncated) name.
+          const title = state === 'unknown' || state === 'skipped' ? describe(node, state, count) : node.name;
           return (
             <button
               key={node.id}
@@ -169,7 +177,7 @@ export function PipelineGraph(props: PipelineGraphProps): JSX.Element {
                 height: box.height,
                 borderRadius: box.height / 2,
               }}
-              title={node.name}
+              title={title}
               aria-label={describe(node, state, count)}
               aria-current={state === 'active' ? 'step' : undefined}
               aria-pressed={onNodeClick ? node.id === selectedNodeId : undefined}

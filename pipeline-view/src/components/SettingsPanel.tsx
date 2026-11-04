@@ -22,6 +22,7 @@ export interface SettingsPanelProps {
   saveConfig(next: PipelineConfig): Promise<ActionResult>;
   createField(cfg: AddFieldConfig): Promise<string | null>;
   addStageOption(name: string, fieldId?: string): Promise<string | null>;
+  addSelectOptions(fieldId: string, options: { name: string; color?: number }[]): Promise<(string | null)[]>;
 }
 
 type TabKey = 'fields' | 'pipeline' | 'statuses' | 'display';
@@ -120,7 +121,14 @@ export function SettingsPanel(props: SettingsPanelProps) {
     >
       <Tabs type="line" activeKey={tab} onChange={(key) => setTab(key as TabKey)} className="pv-settings__tabs" lazyRender>
         <TabPane itemKey="fields" tab={tabLabel('fields', !stageOk)}>
-          <FieldsTab ctx={ctx} draft={draft} update={update} views={props.views} createField={props.createField} />
+          <FieldsTab
+            ctx={ctx}
+            draft={draft}
+            update={update}
+            views={props.views}
+            createField={props.createField}
+            addSelectOptions={props.addSelectOptions}
+          />
         </TabPane>
         <TabPane itemKey="pipeline" tab={tabLabel('pipeline', Boolean(cycle))}>
           <PipelineTab ctx={ctx} draft={draft} update={update} addStageOption={props.addStageOption} cycle={cycle} />

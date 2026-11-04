@@ -27,6 +27,13 @@ const settings: DictPart = {
     'settings.fields.enteredAt.hint': 'Trường ngày giờ, được ghi tự động mỗi khi bản ghi chuyển bước — dùng để tính thời gian ở bước.',
     'settings.fields.history.label': 'Lịch sử quy trình',
     'settings.fields.history.hint': 'Trường văn bản, mỗi lần chuyển bước thêm một dòng nhật ký — giúp biết bước nào đã đi qua.',
+    'settings.fields.path.label': 'Các bước đã qua',
+    'settings.fields.path.hint':
+      'Trường chọn nhiều, mỗi tùy chọn là một bước. View tự tích bước mỗi lần chuyển bước; với bản ghi cũ có thể tích tay. Nhờ đó biết bản ghi đã đi nhánh nào.',
+    'settings.fields.path.missing': 'Thiếu {count} bước: {names}',
+    'settings.fields.path.addMissing': 'Thêm tùy chọn còn thiếu',
+    'settings.fields.path.added': 'Đã thêm {count} tùy chọn',
+    'settings.fields.path.addFailed': 'Không thêm được tùy chọn. Hãy kiểm tra quyền chỉnh sửa bảng.',
     'settings.fields.sourceView.label': 'Nguồn bản ghi',
     'settings.fields.sourceView.hint': 'Dùng bộ lọc và thứ tự của một chế độ xem lưới để chọn bản ghi hiển thị.',
     'settings.fields.sourceView.all': 'Tất cả bản ghi',
@@ -44,6 +51,7 @@ const settings: DictPart = {
     'settings.fields.new.status.blocked': 'Bị chặn',
     'settings.fields.new.enteredAt': 'Thời điểm vào bước',
     'settings.fields.new.history': 'Lịch sử quy trình',
+    'settings.fields.new.path': 'Các bước đã qua',
 
     'settings.pipeline.preview': 'Xem trước',
     'settings.pipeline.intro': 'Các bước lấy từ lựa chọn của trường “{field}” theo đúng thứ tự — không giới hạn số lượng. Đổi tên hay sắp xếp lựa chọn ngay trong trường đó.',
@@ -135,6 +143,13 @@ const settings: DictPart = {
     'settings.fields.enteredAt.hint': 'A date-time field stamped automatically whenever the stage changes — used for time in stage.',
     'settings.fields.history.label': 'Pipeline history',
     'settings.fields.history.hint': 'A text field that gets one log line per stage change — tells which stages were visited.',
+    'settings.fields.path.label': 'Steps passed',
+    'settings.fields.path.hint':
+      'A multi-select field with one option per step. The view ticks steps automatically on every move; tick them by hand for older records. This tells which branch a record took.',
+    'settings.fields.path.missing': '{count} steps missing: {names}',
+    'settings.fields.path.addMissing': 'Add missing options',
+    'settings.fields.path.added': '{count} options added',
+    'settings.fields.path.addFailed': 'Could not add the options. Check that you can edit this table.',
     'settings.fields.sourceView.label': 'Record source',
     'settings.fields.sourceView.hint': 'Use the filter and order of a grid view to choose which records are shown.',
     'settings.fields.sourceView.all': 'All records',
@@ -152,6 +167,7 @@ const settings: DictPart = {
     'settings.fields.new.status.blocked': 'Blocked',
     'settings.fields.new.enteredAt': 'Entered stage at',
     'settings.fields.new.history': 'Pipeline history',
+    'settings.fields.new.path': 'Steps passed',
 
     'settings.pipeline.preview': 'Preview',
     'settings.pipeline.intro': 'Stages come from the options of “{field}”, in option order — there is no limit on their number. Rename or reorder options in that field.',

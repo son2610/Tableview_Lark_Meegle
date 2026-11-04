@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FieldType } from '../../../types';
 import type { Edge, FieldMeta, RecordData } from '../../../types';
+import { buildGraph } from '../../../core/graph';
+import { computeNodeStates } from '../../../core/state';
 import type { RecordsChangeEvent, Unsubscribe } from '../../adapter';
 import { createLarkAdapter, eventRecordIds, sdkErrorMessage, toOptionColors } from '../../larkAdapter';
 import { FALLBACK_OPTION_COLORS, optionColor } from '../../palette';
@@ -15,6 +17,8 @@ import {
   MOCK_RECORDS,
   MOCK_TABLE,
   MOCK_VIEW_IDS,
+  PATH_OPTIONS,
+  PATH_STEP,
   STAGE,
   STAGE_OPTIONS,
   STATUS,
@@ -76,6 +80,22 @@ function textOf(value: unknown): string {
 
 function selectId(value: unknown): string | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? String((value as { id?: unknown }).id) : null;
+}
+
+/** Nodes reachable from `node` in a DAG given as edges (excluding itself). */
+function descendantsOf(node: string, edges: Edge[]): Set<string> {
+  const out = new Set<string>();
+  const stack = [node];
+  while (stack.length) {
+    const cur = stack.pop() as string;
+    for (const e of edges) {
+      if (e.from === cur && !out.has(e.to)) {
+        out.add(e.to);
+        stack.push(e.to);
+      }
+    }
+  }
+  return out;
 }
 
 /** Strict ancestors of `node` in a DAG given as edges. */
@@ -236,6 +256,26 @@ describe('mock adapter', () => {
     expect(F.feGrayBox in fields).toBe(false);
   });
 
+  it('writes "Steps passed" multi-select values and appends options to that field', async () => {
+    const adapter = createMockAdapter(fast());
+    const value = [
+      { id: PATH_STEP.DA.id, text: 'stale text' },
+      { id: PATH_STEP.TD.id, text: PATH_STEP.TD.name },
+    ];
+    await adapter.setRecord('recPv13Offl', { [F.path]: value });
+    expect((await adapter.getRecord('recPv13Offl'))?.fields[F.path]).toEqual([
+      { id: PATH_STEP.DA.id, text: 'DA Tracking' },
+      { id: PATH_STEP.TD.id, text: 'Tech Design' },
+    ]);
+    const optionId = await adapter.addSelectOption(F.path, 'Security Audit', 7);
+    await adapter.setCell('recPv13Offl', F.path, [{ id: optionId, text: 'Security Audit' }]);
+    expect((await adapter.getRecord('recPv13Offl'))?.fields[F.path]).toEqual([{ id: optionId, text: 'Security Audit' }]);
+    expect((await adapter.getFields()).find((f) => f.id === F.path)?.options?.at(-1)).toMatchObject({ name: 'Security Audit', color: 7 });
+    await adapter.setCell('recPv13Offl', F.path, []);
+    expect((await adapter.getRecord('recPv13Offl'))?.fields[F.path]).toBeUndefined();
+    await expect(adapter.setCell('recPv13Offl', F.path, [{ id: 'optNope123', text: 'Nope' }])).rejects.toThrow(/does not exist/);
+  });
+
   it('setCell delegates to setRecord', async () => {
     const adapter = createMockAdapter(fast());
     const event = nextEvent<RecordsChangeEvent>((cb) => adapter.onRecordsChange(cb));
@@ -368,6 +408,10 @@ describe('demo data', () => {
     expectType(DEMO_CONFIG.statusFieldId, FieldType.SingleSelect);
     expectType(DEMO_CONFIG.enteredAtFieldId, FieldType.DateTime);
     expectType(DEMO_CONFIG.historyFieldId, FieldType.Text);
+    expectType(DEMO_CONFIG.pathFieldId, FieldType.MultiSelect);
+    // One "Steps passed" option per stage, same names and colours.
+    expect(PATH_OPTIONS.map((o) => [o.name, o.color])).toEqual(STAGE_OPTIONS.map((o) => [o.name, o.color]));
+    expect(fieldById.get(F.path)?.options).toEqual(PATH_OPTIONS);
     DEMO_CONFIG.roleFieldIds.forEach((id) => expectType(id, FieldType.User));
     DEMO_CONFIG.checklistFieldIds.forEach((id) => expectType(id, FieldType.Checkbox));
     DEMO_CONFIG.listFieldIds.forEach((id) => expect(fieldById.has(id)).toBe(true));
@@ -434,6 +478,64 @@ describe('demo data', () => {
       expect(stage, `${record.id} stage matches history`).toBe(current);
       expect(record.fields[F.enteredAt], `${record.id} enteredAt`).toBe(lastMoveAt);
     }
+  });
+
+  it('has "Steps passed" values equal to the steps the history visited (rollbacks untick later steps)', () => {
+    const pathName = new Map(PATH_OPTIONS.map((o) => [o.id, o.name]));
+    for (const record of MOCK_RECORDS) {
+      const history = textOf(record.fields[F.history]);
+      const cell = record.fields[F.path];
+      if (!history) {
+        expect(cell, `${record.id}: no history, no steps passed`).toBeUndefined();
+        continue;
+      }
+      const visited = new Set<string>();
+      for (const line of history.split('\n').map(parseLine) as ParsedLine[]) {
+        const to = stageByName.get(line.to) as string;
+        if (line.kind === 'start') {
+          visited.clear();
+          visited.add(to);
+        } else if (line.kind === 'advance') {
+          visited.add(stageByName.get(line.from as string) as string);
+          visited.add(to);
+        } else if (line.kind === 'rollback') {
+          visited.add(to);
+          for (const later of descendantsOf(to, DEMO_EDGES)) visited.delete(later);
+        } else {
+          visited.add(to);
+        }
+      }
+      expect(Array.isArray(cell), record.id).toBe(true);
+      const items = cell as { id: string; text: string }[];
+      for (const item of items) expect(pathName.get(item.id), `${record.id}: option ${item.id}`).toBe(item.text);
+      // Same steps, listed in pipeline (option) order.
+      const expected = STAGE_OPTIONS.filter((o) => visited.has(o.id)).map((o) => o.name);
+      expect(items.map((i) => i.text), record.id).toEqual(expected);
+    }
+  });
+
+  it('shows "unknown" branch steps only for records without steps passed and history', () => {
+    const graph = buildGraph(STAGE_OPTIONS, DEMO_EDGES);
+    const unknownIn = (r: RecordData) =>
+      [...computeNodeStates(graph, r, DEMO_CONFIG, fieldById).states].filter(([, s]) => s === 'unknown').map(([id]) => id);
+    const withUnknown = MOCK_RECORDS.filter((r) => unknownIn(r).length > 0);
+    expect(withUnknown.map((r) => r.id).sort()).toEqual(['recPv18Prtn', 'recPv19Bill']);
+    for (const r of withUnknown) {
+      expect(r.fields[F.history], r.id).toBeUndefined();
+      expect(r.fields[F.path], r.id).toBeUndefined();
+    }
+    // At Integration Test, only DA → DR → TD lie on every route: the three branches are unknown.
+    const imported = MOCK_RECORDS.find((r) => r.id === 'recPv18Prtn') as RecordData;
+    expect(unknownIn(imported).sort()).toEqual([STAGE.FEP.id, STAGE.SVP.id, STAGE.QAP.id, STAGE.FED.id, STAGE.SVD.id, STAGE.QAT.id].sort());
+    const states = computeNodeStates(graph, imported, DEMO_CONFIG, fieldById);
+    expect(states.visitSource).toBe('inferred');
+    for (const id of [STAGE.DA.id, STAGE.DR.id, STAGE.TD.id]) expect(states.states.get(id)).toBe('done');
+    // Records written by the plugin read their branch from the path field.
+    const branched = MOCK_RECORDS.find((r) => r.id === 'recPv03Dark') as RecordData;
+    const fromPath = computeNodeStates(graph, branched, DEMO_CONFIG, fieldById);
+    expect(fromPath.visitSource).toBe('path');
+    expect(fromPath.states.get(STAGE.QAP.id)).toBe('done');
+    expect(fromPath.states.get(STAGE.FEP.id)).toBe('skipped');
   });
 
   it('covers the scenarios the UI needs', () => {

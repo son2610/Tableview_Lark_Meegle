@@ -74,6 +74,12 @@
   border-radius: 4px;
 }
 
+.pv-state-tag--unknown {
+  background: var(--pv-surface-2);
+  color: var(--pv-text-2);
+  border: 1px dashed var(--pv-border-strong);
+}
+
 .pv-np-progress {
   display: inline-flex;
   align-items: center;

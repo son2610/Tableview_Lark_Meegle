@@ -17,7 +17,7 @@ const CATEGORIES: readonly StatusCategory[] = ['todo', 'doing', 'done', 'blocked
  *   fallback skips fields named like a status field when another SingleSelect exists.
  * - statusFieldId: another SingleSelect matching status hints
  *   (status, state, trạng thái, tình trạng, 状态), else undefined.
- * - enteredAtFieldId / historyFieldId: undefined.
+ * - enteredAtFieldId / historyFieldId / pathFieldId: undefined.
  * - statusCategories from guessStatusCategory for every status option.
  * - defaultEntryStatusId: first status option with category 'todo', else first option.
  * - requireDoneToAdvance false, allowRollback true, edges null, nodes {} filled by normalizeConfig,
@@ -33,8 +33,8 @@ export function createDefaultConfig(fields: FieldMeta[]): PipelineConfig {
  * Validate and repair a stored config against the current fields. Never throws.
  * - Non-object / wrong version -> createDefaultConfig(fields).
  * - Field ids that no longer exist or have an unexpected type are dropped
- *   (stage/status must be SingleSelect, enteredAt DateTime, history Text, owner User,
- *   role fields User, checklist fields Checkbox). titleFieldId falls back to primary.
+ *   (stage/status must be SingleSelect, enteredAt DateTime, history Text, path MultiSelect,
+ *   owner User, role fields User, checklist fields Checkbox). titleFieldId falls back to primary.
  *   statusFieldId is also dropped when it equals stageFieldId.
  * - nodes: exactly one entry per current stage option (missing -> {fields: []});
  *   rules referencing missing fields are dropped; duplicate fieldIds collapsed (first wins);
@@ -257,6 +257,7 @@ function repair(raw: RawConfig, fields: FieldMeta[]): PipelineConfig {
     statusFieldId: statusField?.id,
     enteredAtFieldId: fieldOf(raw.enteredAtFieldId, [FieldType.DateTime])?.id,
     historyFieldId: fieldOf(raw.historyFieldId, [FieldType.Text])?.id,
+    pathFieldId: fieldOf(raw.pathFieldId, [FieldType.MultiSelect])?.id,
     sourceViewId: typeof raw.sourceViewId === 'string' && raw.sourceViewId !== '' ? raw.sourceViewId : undefined,
     statusCategories,
     defaultEntryStatusId,

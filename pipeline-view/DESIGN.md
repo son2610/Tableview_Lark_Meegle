@@ -30,20 +30,59 @@ fields and a richer UI.
   value, so a record is at exactly one node; true parallel nodes are out of
   scope (would need a multi-select stage field — listed as follow-up).
 - **Rollback**: when `allowRollback`, a record can be sent back to any strict
-  ancestor of its current node (restricted to visited nodes when a history
-  field is configured). No validation on rollback.
+  ancestor of its current node, except ancestors the visit information proves
+  were never passed (see *Visited steps*). No validation on rollback.
 - **Start**: a record whose stage is empty shows "Not started" + a Start
   button (choose a root when several).
 - **Advance**: validate current node (required fields; plus status must be in
   category `done` when `requireDoneToAdvance`), then ONE `setRecord` call writes:
   stage := target, status := entry status (node override → default), enteredAt := now,
-  history += line. Targets = successors of the current node.
+  history += line, steps passed (below). Targets = successors of the current node.
 - **Complete** (terminal node): validate, then status := first `done` status,
-  history += "✓ node". The record is then *finished* (terminal node shown green).
+  history += "✓ node", steps passed += node. The record is then *finished*
+  (terminal node shown green).
+- **Steps passed** (`config.pathFieldId`, optional MultiSelect): selected options =
+  steps the record went through, matched to nodes by name (trimmed, Unicode NFC).
+  Written in the same `setRecord` as the stage, on every transition: start → {to};
+  advance → (ticks leading to current) ∪ {current, to}; rollback to X → (∪ {X}) minus
+  descendants(X); complete → (ticks leading to current) ∪ {current}. "Ticks leading to
+  current" = current and its ancestors: other ticks come from a route left in the grid.
+  Value = node options in topoOrder, then options matching no node (user data, always
+  kept, including items whose option is not in the cached field metadata yet) in their
+  original order. Missing options are created first (`addSelectOption`, node colour,
+  serialized per field so concurrent moves do not create duplicates; failures only log
+  and the step is left out, which reads as "not recorded", not "skipped"). A cell that
+  ticks no node yet is seeded with the current run as the trusted history log proves it
+  (`replayHistory`: a rollback unticks the descendants of its target) plus the dominators
+  `readVisits` reports as certain, the latter only when they do not make the route look
+  recorded across an unknown branch (shortcut edge). Users may tick it by hand.
+- **Visited steps** (`readVisits`, first available source):
+  1. *path* — the steps-passed cell names ≥ 1 node (`pathCoverage`). Walk back from the
+     current node through ticked predecessors: that tail of the route is recorded step by
+     step. At a non-root node with no ticked predecessor (an *anchor*: the stage was changed
+     in the grid, or only some steps were ticked) the cell stops covering: the anchor's
+     ancestors are uncovered, like those before a log that starts mid-way. Nodes whose name
+     has no option in the field are uncovered too. Certain = dominators of the current node
+     and of every ticked ancestor.
+  2. *history* — the log names ≥ 1 current node. A log with a "▶" start line covers
+     every node; a log without one began mid-way and only covers its first logged
+     node (a rollback's target when the first line is a rollback) and what follows; a
+     log naming a renamed/deleted option proves visits but marks nothing skipped.
+  3. *inferred* — nothing recorded.
+  Ancestors of the current node: visited or certain (on every route from a root to a
+  node known reached, `dominators()`) → `done`; else not covered → `unknown`; else
+  `skipped`. Rollback targets = ancestors that are visited, certain or uncovered. A
+  linear pipeline without any record therefore still shows every earlier step done.
 - **Node states** (record graph): `done` (green dot), `active` (blue border; dot
   colour by status category: todo grey, doing amber, blocked red, done green),
   `pending` (grey text + grey dot; terminal nodes show a flag icon), `skipped`
-  (ancestor never visited according to history: dashed border, faded).
+  (ancestor proven never visited: dashed border, faded), `unknown` (ancestor that
+  may or may not have been visited: normal border and text, hollow dashed grey dot,
+  title "<node> – Không rõ đã qua hay chưa"; its edges stay the normal grey).
+  Skipped nodes get the title "<node> – Đã bỏ qua – bản ghi không đi qua bước này".
+  The legend lists "Đã bỏ qua" / "Không rõ" only when a node has that state; with an
+  unknown node editors also get a one-line hint under the graph (pick the steps-passed
+  field, or tick its steps).
 - **Status categories**: each status option is mapped to todo/doing/done/blocked
   (auto-guessed from the name, editable in settings).
 - Stage edits made directly in the grid bypass validation — the view only
@@ -56,8 +95,8 @@ fields and a richer UI.
   Always passed through `normalizeConfig(raw, fields)` after loading and before
   use, so deleted fields/options never crash the UI.
 - Record data lives only in the table's own fields (stage, status, optional
-  enteredAt DateTime and history Text fields). Nothing per-record is stored in
-  plugin storage.
+  enteredAt DateTime, history Text and steps-passed MultiSelect fields). Nothing
+  per-record is stored in plugin storage.
 
 ## 4. Architecture
 
@@ -66,7 +105,7 @@ src/
   types.ts                 shared domain types + UI contracts (DO NOT change signatures)
   sdk/adapter.ts           BaseAdapter interface (host boundary)
   sdk/larkAdapter.ts       real implementation over @lark-opdev/block-bitable-api
-  sdk/mock/mockData.ts     sample table (fields, options, ~14 records, demo config)
+  sdk/mock/mockData.ts     sample table (fields, options, 19 records, demo config)
   sdk/mock/mockAdapter.ts  in-memory BaseAdapter with events + latency
   core/*.ts                pure logic, no React, no SDK (unit tested with vitest)
   core/__tests__/*.test.ts
@@ -166,6 +205,7 @@ export interface PipelineData {
   saveConfig(next: PipelineConfig): Promise<ActionResult>;
   createField(cfg: AddFieldConfig): Promise<string | null>;   // returns new field id
   addStageOption(name: string): Promise<string | null>;       // returns new option id
+  addSelectOptions(fieldId: string, options: { name: string; color?: number }[]): Promise<(string | null)[]>;
   reload(): void;
 }
 export function usePipelineData(adapter: BaseAdapter): PipelineData;
@@ -208,9 +248,12 @@ Layout (App):
 - Read-only users: no edit controls, settings disabled with tooltip.
 - Settings (SideSheet, ~720px, tabs):
   1. *Fields*: title field, stage field (SingleSelect, required), status field
-     (SingleSelect), "entered stage at" (DateTime), history (Text), source view
-     (Grid views, optional). Quick-create buttons for missing stage / status /
-     enteredAt / history fields (`createField`).
+     (SingleSelect), "entered stage at" (DateTime), history (Text), steps passed
+     (MultiSelect), source view (Grid views, optional). Quick-create buttons for
+     missing stage / status / enteredAt / history / steps-passed fields
+     (`createField`; steps passed copies the stage options' names and colours).
+     When the steps-passed field lacks some stage names: "Thiếu N bước" +
+     "Thêm tùy chọn còn thiếu" (`addSelectOptions`).
   2. *Pipeline*: live preview graph; "Add node" (adds a stage option);
      "Reset to linear"; per-node card: next nodes (multi-select), owner (User field),
      fields to fill (multi-select) + per-field "required" checkbox, entry status,

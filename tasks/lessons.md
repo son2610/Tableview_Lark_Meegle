@@ -20,6 +20,13 @@
 - For UI checks in the in-app browser pane, drive and assert through `javascript_tool` (DOM + `window.__pvMock`)
   instead of coordinates: emulated viewports are scaled into a smaller click frame and the pane width can
   change mid-test.
+- A record of visited steps (path cell, history log) is only trustworthy as an unbroken chain back from the current
+  step. Where the chain breaks, everything before the break must read "unknown", never "not passed"; and a writer
+  must not fill a gap with inferred steps that connect across a shortcut edge. Why: every "skipped" the reviewers
+  found came from treating an incomplete record as complete.
+- In this Bash tool, long quoted heredocs (`<<'PY'`) with mixed quotes and Unicode sometimes fail to parse
+  ("unexpected EOF"); write the script to the scratchpad with Write and run it instead. Python file edits must
+  keep the file's line endings (repo mixes LF and CRLF; autocrlf=true).
 - Webpack `cache.name` must differ per mode: a dev build restoring a production cache (MiniCssExtractPlugin entries)
   prints thousands of "Restoring failed ... CssDependency" warnings that look like an infinite loop. Also set
   `infrastructureLogging.level = 'error'`: tracing build deps through @lark-opdev/cli floods harmless cache warnings

@@ -67,7 +67,13 @@ export function PipelineTab({ ctx, draft, update, addStageOption, cycle }: Pipel
     );
   }
 
-  const excluded = new Set([draft.stageFieldId, draft.statusFieldId, draft.historyFieldId, draft.enteredAtFieldId]);
+  const excluded = new Set([
+    draft.stageFieldId,
+    draft.statusFieldId,
+    draft.historyFieldId,
+    draft.enteredAtFieldId,
+    draft.pathFieldId,
+  ]);
   const candidateFields = ctx.fields.filter((f) => !excluded.has(f.id));
   const userFields = ctx.fields.filter((f) => f.type === FieldType.User);
 

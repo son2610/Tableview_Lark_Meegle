@@ -148,9 +148,10 @@ export function NodePanel(props: NodePanelProps): JSX.Element | null {
   const isCurrent = states.current === nodeId;
   const notStarted = states.current === null;
   const isTerminal = (graph.successors.get(nodeId) ?? []).length === 0;
-  // Fields of the current step and of steps not reached yet can be filled in; completed or
-  // skipped steps are read-only so a step that passed its gate cannot lose its required data.
-  const fieldsEditable = editable && (isCurrent || state === 'pending');
+  // Fields of the current step and of steps not reached yet (or not known to be passed) can be
+  // filled in; completed or skipped steps are read-only so a step that passed its gate cannot
+  // lose its required data.
+  const fieldsEditable = editable && (isCurrent || state === 'pending' || state === 'unknown');
 
   const progress = isCurrent ? requiredProgress(tctx, record, nodeId) : null;
   const successors = isCurrent ? nextTargets(tctx, record) : [];
@@ -292,7 +293,7 @@ export function NodePanel(props: NodePanelProps): JSX.Element | null {
     notice = (
       <div className={`pv-np-notice pv-np-notice--${key}`}>
         <span>{t(`detail.node.notice.${key}`)}</span>
-        {fieldsEditable && rules.length > 0 ? (
+        {fieldsEditable && state === 'pending' && rules.length > 0 ? (
           <span className="pv-np-muted">{t('detail.node.notice.editAhead')}</span>
         ) : null}
       </div>

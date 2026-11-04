@@ -39,6 +39,8 @@ const FIELDS: FieldMeta[] = [
   field('f_status', 'Trạng thái', FieldType.SingleSelect, { options: STATUS_OPTIONS }),
   field('f_entered', 'Entered at', FieldType.DateTime),
   field('f_history', 'History', FieldType.Text),
+  field('f_path', 'Các bước đã qua', FieldType.MultiSelect, { options: STAGE_OPTIONS.map((o) => ({ ...o, id: `p_${o.id}` })) }),
+  field('f_tags', 'Tags', FieldType.MultiSelect, { options: options('a', 'b') }),
   field('f_owner', 'Owner', FieldType.User),
   field('f_qa', 'QA', FieldType.User),
   field('f_check', 'Safety review', FieldType.Checkbox),
@@ -52,6 +54,7 @@ const validRaw = (): Record<string, unknown> => ({
   statusFieldId: 'f_status',
   enteredAtFieldId: 'f_entered',
   historyFieldId: 'f_history',
+  pathFieldId: 'f_path',
   sourceViewId: 'vew1',
   statusCategories: { st_todo: 'todo', st_doing: 'doing', st_done: 'done', st_block: 'blocked' },
   defaultEntryStatusId: 'st_todo',
@@ -173,6 +176,7 @@ describe('createDefaultConfig', () => {
     expect(cfg.roleFieldIds).toEqual([]);
     expect(cfg.checklistFieldIds).toEqual([]);
     expect(cfg.listFieldIds).toEqual([]);
+    expect(cfg.pathFieldId).toBeUndefined();
   });
 
   it('prefers an exact stage name and English / Chinese hints', () => {
@@ -327,6 +331,16 @@ describe('normalizeConfig', () => {
     expect(cfg.roleFieldIds).toEqual(['f_owner', 'f_qa']);
     expect(cfg.checklistFieldIds).toEqual(['f_check']);
     expect(cfg.listFieldIds).toEqual(['f_num', 'f_title']);
+  });
+
+  it('keeps the path field only while it exists as a MultiSelect', () => {
+    expect(normalizeConfig(validRaw(), FIELDS).pathFieldId).toBe('f_path');
+    expect(normalizeConfig({ ...validRaw(), pathFieldId: 'f_tags' }, FIELDS).pathFieldId).toBe('f_tags');
+    for (const bad of ['f_stage', 'f_history', 'gone', '', 7, null, { id: 'f_path' }]) {
+      expect(normalizeConfig({ ...validRaw(), pathFieldId: bad }, FIELDS).pathFieldId, String(bad)).toBeUndefined();
+    }
+    const withoutPathField = FIELDS.filter((f) => f.id !== 'f_path');
+    expect(normalizeConfig(validRaw(), withoutPathField).pathFieldId).toBeUndefined();
   });
 
   it('drops a stage field that was deleted or is not a SingleSelect (no silent re-guess)', () => {

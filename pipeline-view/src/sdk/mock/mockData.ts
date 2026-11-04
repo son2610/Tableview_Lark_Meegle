@@ -110,6 +110,7 @@ export const F = {
   score: 'fldFsc8Ry6',
   enteredAt: 'fldDea4Zh1',
   history: 'fldThy9Bn5',
+  path: 'fldPth3Sv6',
   createdBy: 'fldCby6Wc7',
   ticketNo: 'fldAno1Mv3',
 } as const;
@@ -133,6 +134,26 @@ export const STAGE: Record<StageKey, SelectOption> = {
 
 const STAGE_ORDER: StageKey[] = ['DA', 'DR', 'TD', 'FEP', 'SVP', 'QAP', 'FED', 'SVD', 'QAT', 'IT', 'REL', 'RETRO'];
 export const STAGE_OPTIONS: SelectOption[] = STAGE_ORDER.map((k) => STAGE[k]);
+
+/** Options of the "Steps passed" MultiSelect: one per stage, same name and colour, own ids. */
+const PATH_OPTION_IDS: Record<StageKey, string> = {
+  DA: 'optPsDa01Q',
+  DR: 'optPsDr02M',
+  TD: 'optPsTd03K',
+  FEP: 'optPsFp04W',
+  SVP: 'optPsSp05R',
+  QAP: 'optPsQp06X',
+  FED: 'optPsFd07T',
+  SVD: 'optPsSd08N',
+  QAT: 'optPsQt09J',
+  IT: 'optPsIt10B',
+  REL: 'optPsRl11C',
+  RETRO: 'optPsRt12H',
+};
+export const PATH_STEP: Record<StageKey, SelectOption> = Object.fromEntries(
+  STAGE_ORDER.map((k) => [k, { ...STAGE[k], id: PATH_OPTION_IDS[k] }]),
+) as Record<StageKey, SelectOption>;
+export const PATH_OPTIONS: SelectOption[] = STAGE_ORDER.map((k) => PATH_STEP[k]);
 
 /** A stage value whose option was deleted from the field (exercises the "unknown stage" path). */
 export const DELETED_STAGE_OPTION: SelectOption = { id: 'optUatLg9S', name: 'UAT (legacy)', color: 3 };
@@ -217,6 +238,7 @@ export const MOCK_FIELDS: FieldMeta[] = [
   plain(F.score, 'Score', FieldType.Formula, { formula: 'IF([Priority]="P0",30,IF([Priority]="P1",20,10))+[Estimate (days)]' }),
   plain(F.enteredAt, 'Entered stage at', FieldType.DateTime, DATE_TIME_PROPERTY),
   plain(F.history, 'Pipeline history', FieldType.Text),
+  select(F.path, 'Steps passed', FieldType.MultiSelect, PATH_OPTIONS),
   plain(F.createdBy, 'Created by', FieldType.CreatedUser),
   plain(F.ticketNo, 'Ticket No.', FieldType.AutoNumber),
 ];
@@ -225,25 +247,42 @@ export const MOCK_FIELDS: FieldMeta[] = [
 /* Demo pipeline config                                                */
 /* ------------------------------------------------------------------ */
 
-const edge = (from: StageKey, to: StageKey): Edge => ({ from: STAGE[from].id, to: STAGE[to].id });
-
-export const DEMO_EDGES: Edge[] = [
-  edge('DA', 'DR'),
-  edge('DR', 'TD'),
-  edge('TD', 'FEP'),
-  edge('TD', 'SVP'),
-  edge('TD', 'QAP'),
-  edge('FEP', 'FED'),
-  edge('FEP', 'SVD'),
-  edge('SVP', 'SVD'),
-  edge('QAP', 'SVD'),
-  edge('QAP', 'QAT'),
-  edge('FED', 'IT'),
-  edge('SVD', 'IT'),
-  edge('QAT', 'IT'),
-  edge('IT', 'REL'),
-  edge('REL', 'RETRO'),
+/** The demo flow as stage keys: TD branches into FE / Server / QA, which merge again at IT. */
+const DEMO_FLOW: [StageKey, StageKey][] = [
+  ['DA', 'DR'],
+  ['DR', 'TD'],
+  ['TD', 'FEP'],
+  ['TD', 'SVP'],
+  ['TD', 'QAP'],
+  ['FEP', 'FED'],
+  ['FEP', 'SVD'],
+  ['SVP', 'SVD'],
+  ['QAP', 'SVD'],
+  ['QAP', 'QAT'],
+  ['FED', 'IT'],
+  ['SVD', 'IT'],
+  ['QAT', 'IT'],
+  ['IT', 'REL'],
+  ['REL', 'RETRO'],
 ];
+
+export const DEMO_EDGES: Edge[] = DEMO_FLOW.map(([from, to]) => ({ from: STAGE[from].id, to: STAGE[to].id }));
+
+/** Stages reachable from `key` in the demo flow (excluding itself). */
+function stagesAfter(key: StageKey): Set<StageKey> {
+  const out = new Set<StageKey>();
+  const queue: StageKey[] = [key];
+  while (queue.length > 0) {
+    const cur = queue.shift() as StageKey;
+    for (const [from, to] of DEMO_FLOW) {
+      if (from === cur && !out.has(to)) {
+        out.add(to);
+        queue.push(to);
+      }
+    }
+  }
+  return out;
+}
 
 const req = (fieldId: string) => ({ fieldId, required: true });
 const opt = (fieldId: string) => ({ fieldId, required: false });
@@ -291,6 +330,7 @@ export const DEMO_CONFIG: PipelineConfig = {
   statusFieldId: F.status,
   enteredAtFieldId: F.enteredAt,
   historyFieldId: F.history,
+  pathFieldId: F.path,
   statusCategories: {
     [STATUS.notStarted.id]: 'todo',
     [STATUS.inProgress.id]: 'doing',
@@ -339,11 +379,13 @@ interface Journey {
   passed: StageKey[];
   /** When the record left each passed node. */
   leftAt: Partial<Record<StageKey, number>>;
+  /** "Steps passed" as the plugin writes it: rollbacks untick everything after the target. */
+  path: Set<StageKey>;
 }
 
-/** Replays a journey through the DEMO graph, producing the stage, enteredAt and history log. */
+/** Replays a journey through the DEMO graph, producing the stage, enteredAt, history log and steps passed. */
 function replay(steps: JourneyStep[]): Journey {
-  const j: Journey = { current: null, enteredAt: null, history: '', passed: [], leftAt: {} };
+  const j: Journey = { current: null, enteredAt: null, history: '', passed: [], leftAt: {}, path: new Set() };
   const lines: string[] = [];
   for (const [daysAgo, kind, to] of steps) {
     const at = ago(daysAgo);
@@ -353,17 +395,23 @@ function replay(steps: JourneyStep[]): Journey {
       lines.push(`[${stamp(at)}] ✓ ${STAGE[from].name}`);
       j.passed.push(from);
       j.leftAt[from] = at;
+      j.path.add(from);
       continue;
     }
     if (!to) throw new Error(`mockData: ${kind} without a target`);
-    if (kind === 'start') lines.push(`[${stamp(at)}] ▶ ${STAGE[to].name}`);
-    else if (!from) throw new Error(`mockData: ${kind} before start`);
+    if (kind === 'start') {
+      lines.push(`[${stamp(at)}] ▶ ${STAGE[to].name}`);
+      j.path = new Set([to]);
+    } else if (!from) throw new Error(`mockData: ${kind} before start`);
     else if (kind === 'advance') {
       lines.push(`[${stamp(at)}] ${STAGE[from].name} → ${STAGE[to].name}`);
       j.passed.push(from);
       j.leftAt[from] = at;
+      j.path.add(from).add(to);
     } else {
       lines.push(`[${stamp(at)}] ${STAGE[from].name} ↩ ${STAGE[to].name}`);
+      j.path.add(to);
+      for (const later of stagesAfter(to)) j.path.delete(later);
     }
     j.current = to;
     j.enteredAt = at;
@@ -452,6 +500,7 @@ function buildRecord(spec: RecordSpec, i: number): RecordData {
     fields[F.stage] = option(STAGE[journey.current]);
     fields[F.dataAnalyst] = users(MOCK_USERS.quocBao);
     fields[F.history] = text(journey.history);
+    fields[F.path] = STAGE_ORDER.filter((k) => journey.path.has(k)).map((k) => option(PATH_STEP[k]));
     if (journey.enteredAt !== null) fields[F.enteredAt] = journey.enteredAt;
     if (journey.current === 'DR' || journey.passed.includes('DR')) fields[F.reviewCommittee] = users(MOCK_USERS.thuHa);
   }
@@ -718,6 +767,36 @@ const RECORD_SPECS: RecordSpec[] = [
     epic: 'platform',
     // Moved to a stage option that was later deleted from the Stage field (edited in the grid, so no history line).
     cells: { [F.stage]: option(DELETED_STAGE_OPTION), [F.enteredAt]: ago(18.2) },
+  },
+  {
+    id: 'recPv18Prtn',
+    name: 'Partner API Rate Limits',
+    status: 'inProgress',
+    priority: 'P1',
+    tags: ['infra'],
+    pm: thuHa,
+    dueInDays: 6,
+    epic: 'platform',
+    // Imported from the old tracker straight into Integration Test: no history and no steps passed,
+    // so the view cannot know which of the FE / Server / QA branches it took (shown as "unknown").
+    cells: {
+      [F.stage]: option(STAGE.IT),
+      [F.dataAnalyst]: users(quocBao),
+      [F.techDesignDoc]: url('https://docs.example.com/tech/partner-api-rate-limits', 'Tech design - Partner API Rate Limits'),
+      [F.estimate]: 5,
+    },
+  },
+  {
+    id: 'recPv19Bill',
+    name: 'Billing Data Migration',
+    status: 'inProgress',
+    priority: 'P2',
+    tags: ['payments', 'infra'],
+    pm: minhAnh,
+    dueInDays: 15,
+    epic: 'payments',
+    // Stage set by hand in the grid: Server Dev can be reached from FE Plan, Server Plan or QA Plan.
+    cells: { [F.stage]: option(STAGE.SVD), [F.dataAnalyst]: users(quocBao), [F.serverDevOwner]: users(thanhSon) },
   },
   {
     id: 'recPv16TwoF',

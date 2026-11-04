@@ -23,8 +23,16 @@ import { createDefaultConfig, getDoneStatusId, isConfigured, normalizeConfig } f
 import { buildGraph } from '../core/graph';
 import { layoutGraph } from '../core/layout';
 import { getSelectId, isComputedField, makeSelectValue } from '../core/cell';
+import { pathKey } from '../core/path';
 import { getStatusCategory } from '../core/state';
-import { buildTransitionPatch, currentNodeId, nextTargets, rollbackTargets, validateNode } from '../core/transitions';
+import {
+  buildTransitionPatch,
+  currentNodeId,
+  missingPathOptionNames,
+  nextTargets,
+  rollbackTargets,
+  validateNode,
+} from '../core/transitions';
 import type { TransitionContext } from '../core/transitions';
 import { createT, toLang } from '../i18n';
 import type { TFunc } from '../i18n';
@@ -51,6 +59,11 @@ export interface PipelineData {
    * the settings designer passes its draft stage field (which may not be saved yet).
    */
   addStageOption(name: string, fieldId?: string): Promise<string | null>;
+  /**
+   * Append options to any select field (one host call each, then one fields refresh).
+   * Returns the new option ids in input order, null where adding failed.
+   */
+  addSelectOptions(fieldId: string, options: { name: string; color?: number }[]): Promise<(string | null)[]>;
   reload(): void;
   /** UI language, known before `ctx` (for the loading / error screens). */
   lang: Lang;
@@ -146,6 +159,28 @@ export function restoreKeys(
   return out;
 }
 
+/**
+ * A per-key queue: `queue(key, task)` starts `task` once every task queued earlier under the same
+ * key has settled (failed or not) and resolves like it. Used so that "read the field, see which
+ * options are missing, add them, read it again" never interleaves for one field: two moves (or a
+ * move and the settings button) would otherwise both see an option missing and both create it.
+ */
+export function createKeyedQueue(): <T>(key: string, task: () => Promise<T>) => Promise<T> {
+  const tails = new Map<string, Promise<void>>();
+  return <T>(key: string, task: () => Promise<T>): Promise<T> => {
+    const run = (tails.get(key) ?? Promise.resolve()).then(task);
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    tails.set(key, tail);
+    void tail.then(() => {
+      if (tails.get(key) === tail) tails.delete(key);
+    });
+    return run;
+  };
+}
+
 /** This view's writes to one record: `seq` counts optimistic writes, `inflight` holds unsettled host calls. */
 interface WriteState {
   seq: number;
@@ -200,6 +235,8 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
   const [optionColors, setOptionColors] = useState<OptionColor[]>([]);
   const [config, setConfig, configRef] = useSyncedState<PipelineConfig | null>(null);
   const [hasSavedConfig, setHasSavedConfig] = useState(false);
+  /** Serializes option creation per field (see createKeyedQueue). */
+  const [queueOptions] = useState(createKeyedQueue);
   const [records, setRecords] = useState<RecordData[]>([]);
 
   const mountedRef = useRef(true);
@@ -308,16 +345,38 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
     }
   }, [adapter, loadRecords, setPhase, langRef, setLang, setEditable, setFields, setViews, setConfig]);
 
-  const refreshFields = useCallback(async () => {
+  /** Re-read fields and views; resolves with what was applied (null once unmounted). */
+  const refreshFields = useCallback(async (): Promise<{ fields: FieldMeta[]; config: PipelineConfig } | null> => {
     const [flds, vws] = await Promise.all([
       adapter.getFields(),
       adapter.getViews().catch(() => viewsRef.current),
     ]);
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) return null;
+    const cfg = resolveConfig(rawConfigRef.current, flds, vws);
     setFields(flds);
     setViews(vws);
-    setConfig(resolveConfig(rawConfigRef.current, flds, vws));
+    setConfig(cfg);
+    return { fields: flds, config: cfg };
   }, [adapter, setFields, setViews, setConfig, viewsRef]);
+
+  /** Append options one by one (no refresh). New ids in input order, null where it failed. */
+  const appendOptions = useCallback(
+    async (fieldId: string, options: { name: string; color?: number }[]): Promise<(string | null)[]> => {
+      const ids: (string | null)[] = [];
+      // Sequential: concurrent addOption calls on one field may race in the host.
+      for (const o of options) {
+        const name = o.name.trim();
+        try {
+          ids.push(name ? await adapter.addSelectOption(fieldId, name, o.color) : null);
+        } catch (e) {
+          console.warn('[pipeline-view] addSelectOption failed', name, e);
+          ids.push(null);
+        }
+      }
+      return ids;
+    },
+    [adapter],
+  );
 
   const refreshConfig = useCallback(async () => {
     const raw = await adapter.loadConfig();
@@ -617,43 +676,108 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
       return write(p, patch, 'record');
     };
 
+    /**
+     * Create the "Steps passed" options a transition needs but the field lacks (named and coloured
+     * like their nodes). Returns the transition context rebuilt on the refreshed fields when the
+     * fields were read again, else null. Failures only log: the patch then leaves those steps out,
+     * which the path field reads as "not recorded" rather than "not passed". Runs in the field's
+     * option queue, so concurrent moves do not both create the same option.
+     */
+    const ensurePathOptions = async (p: Prepared, kind: TransitionKind, toNodeId?: string): Promise<TransitionContext | null> => {
+      const missing = (tc: TransitionContext): string[] => {
+        try {
+          return missingPathOptionNames(tc, p.rec, kind, toNodeId);
+        } catch {
+          return [];
+        }
+      };
+      const fieldId = p.tc.config.pathFieldId;
+      if (!fieldId || !p.c.editable || missing(p.tc).length === 0) return null;
+      const withFields = (fresh: { fields: FieldMeta[]; config: PipelineConfig }): TransitionContext => ({
+        ...p.tc,
+        config: fresh.config,
+        fieldById: new Map(fresh.fields.map((f) => [f.id, f] as const)),
+      });
+      return queueOptions(fieldId, async () => {
+        try {
+          // The cached field list may be stale (another move may have just added the option).
+          const before = await refreshFields();
+          if (!before) return null;
+          const names = missing(withFields(before));
+          if (names.length === 0 || before.config.pathFieldId !== fieldId) return withFields(before);
+          const colorOf = (name: string) => p.tc.graph.nodes.find((n) => pathKey(n.name) === pathKey(name))?.color;
+          await appendOptions(fieldId, names.map((name) => ({ name, color: colorOf(name) })));
+          // Read again even when adding failed: a collaborator may have created the option meanwhile.
+          const after = await refreshFields();
+          return after ? withFields(after) : null;
+        } catch (e) {
+          console.warn('[pipeline-view] could not prepare the steps-passed options', e);
+          return null;
+        }
+      });
+    };
+
+    /**
+     * One stage transition: prepareFresh() → `plan` (checks; returns the target or a failure) →
+     * create missing "Steps passed" options → build the patch → write. Creating options costs extra
+     * host round trips, so the record is then read again and re-planned: the write still starts
+     * from the host's data and fails if someone else moved the record meanwhile.
+     */
+    const move = async (
+      recordId: string,
+      kind: TransitionKind,
+      plan: (p: Prepared) => ActionResult | { to?: string },
+    ): Promise<ActionResult> => {
+      const first = await prepareFresh(recordId);
+      if (!isPrepared(first)) return first;
+      let p = first;
+      let step = plan(p);
+      if ('ok' in step) return step;
+      const tc = await ensurePathOptions(p, kind, step.to);
+      if (tc) {
+        const again = await refresh({ ...p, tc: { ...tc, now: Date.now() } });
+        if (!isPrepared(again)) return again;
+        p = again;
+        step = plan(p);
+        if ('ok' in step) return step;
+      }
+      return transition(p, kind, step.to);
+    };
+
     return {
-      async advance(recordId, toNodeId) {
-        const p = await prepareFresh(recordId);
-        if (!isPrepared(p)) return p;
-        const current = currentNodeId(p.tc, p.rec);
-        if (current === null || !nextTargets(p.tc, p.rec).includes(toNodeId)) return fail(p.t('common.error.invalidTarget'));
-        const v = validateNode(p.tc, p.rec, current);
-        if (!v.ok) return validationFailure(p, v);
-        return transition(p, 'advance', toNodeId);
+      advance(recordId, toNodeId) {
+        return move(recordId, 'advance', (p) => {
+          const current = currentNodeId(p.tc, p.rec);
+          if (current === null || !nextTargets(p.tc, p.rec).includes(toNodeId)) return fail(p.t('common.error.invalidTarget'));
+          const v = validateNode(p.tc, p.rec, current);
+          return v.ok ? { to: toNodeId } : validationFailure(p, v);
+        });
       },
 
-      async rollback(recordId, toNodeId) {
-        const p = await prepareFresh(recordId);
-        if (!isPrepared(p)) return p;
-        if (!rollbackTargets(p.tc, p.rec).includes(toNodeId)) return fail(p.t('common.error.invalidTarget'));
-        return transition(p, 'rollback', toNodeId);
+      rollback(recordId, toNodeId) {
+        return move(recordId, 'rollback', (p) =>
+          rollbackTargets(p.tc, p.rec).includes(toNodeId) ? { to: toNodeId } : fail(p.t('common.error.invalidTarget')),
+        );
       },
 
-      async start(recordId, nodeId) {
-        const p = await prepareFresh(recordId);
-        if (!isPrepared(p)) return p;
-        if (currentNodeId(p.tc, p.rec) !== null) return fail(p.t('common.error.invalidTarget'));
-        const target = nodeId ?? p.c.graph.roots[0];
-        if (!target || !p.c.graph.nodeById.has(target)) return fail(p.t('common.error.invalidTarget'));
-        return transition(p, 'start', target);
+      start(recordId, nodeId) {
+        return move(recordId, 'start', (p) => {
+          if (currentNodeId(p.tc, p.rec) !== null) return fail(p.t('common.error.invalidTarget'));
+          const target = nodeId ?? p.c.graph.roots[0];
+          if (!target || !p.c.graph.nodeById.has(target)) return fail(p.t('common.error.invalidTarget'));
+          return { to: target };
+        });
       },
 
-      async complete(recordId) {
-        const p = await prepareFresh(recordId);
-        if (!isPrepared(p)) return p;
-        const current = currentNodeId(p.tc, p.rec);
-        if (current === null || !p.c.graph.terminals.includes(current)) return fail(p.t('common.error.invalidTarget'));
-        if (!getDoneStatusId(p.c.config, p.c.statusField)) return fail(p.t('common.error.noDoneStatus'));
-        const v = validateNode(p.tc, p.rec, current);
-        // Completing is what sets the Done status, so requireDoneToAdvance does not apply here.
-        if (v.missing.length > 0) return validationFailure(p, v);
-        return transition(p, 'complete');
+      complete(recordId) {
+        return move(recordId, 'complete', (p) => {
+          const current = currentNodeId(p.tc, p.rec);
+          if (current === null || !p.c.graph.terminals.includes(current)) return fail(p.t('common.error.invalidTarget'));
+          if (!getDoneStatusId(p.c.config, p.c.statusField)) return fail(p.t('common.error.noDoneStatus'));
+          const v = validateNode(p.tc, p.rec, current);
+          // Completing is what sets the Done status, so requireDoneToAdvance does not apply here.
+          return v.missing.length > 0 ? validationFailure(p, v) : {};
+        });
       },
 
       async setStatus(recordId, statusOptionId) {
@@ -704,7 +828,7 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
         }
       },
     };
-  }, [adapter, commitRecords, langRef]);
+  }, [adapter, commitRecords, langRef, refreshFields, appendOptions, queueOptions]);
 
   /* ---------------------------------------------------------------- */
   /* Configuration                                                      */
@@ -765,6 +889,39 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
     [adapter, configRef, editableRef, refreshFields],
   );
 
+  /**
+   * Make sure `fieldId` has an option per name: names it already has (trimmed, NFC; e.g. created by
+   * a move a moment ago) give their existing id, the others are appended. Ids in input order, null
+   * where adding failed. Shares the field's option queue with the moves.
+   */
+  const addSelectOptions = useCallback(
+    async (fieldId: string, options: { name: string; color?: number }[]): Promise<(string | null)[]> => {
+      if (!editableRef.current || !fieldId) return options.map(() => null);
+      return queueOptions(fieldId, async () => {
+        let current = fieldsRef.current;
+        try {
+          current = (await refreshFields())?.fields ?? current;
+        } catch (e) {
+          console.warn('[pipeline-view] refreshing fields failed', e);
+        }
+        const existing = new Map<string, string>();
+        for (const o of current.find((f) => f.id === fieldId)?.options ?? []) {
+          if (!existing.has(pathKey(o.name))) existing.set(pathKey(o.name), o.id);
+        }
+        const added = await appendOptions(
+          fieldId,
+          options.filter((o) => !existing.has(pathKey(o.name))),
+        );
+        if (added.some((id) => id !== null)) {
+          await refreshFields().catch((e) => console.warn('[pipeline-view] refreshing fields failed', e));
+        }
+        let next = 0;
+        return options.map((o) => existing.get(pathKey(o.name)) ?? added[next++] ?? null);
+      });
+    },
+    [appendOptions, editableRef, fieldsRef, queueOptions, refreshFields],
+  );
+
   const reload = useCallback(() => {
     void loadAll();
   }, [loadAll]);
@@ -781,6 +938,7 @@ export function usePipelineData(adapter: BaseAdapter): PipelineData {
     saveConfig,
     createField,
     addStageOption,
+    addSelectOptions,
     reload,
     lang,
   };

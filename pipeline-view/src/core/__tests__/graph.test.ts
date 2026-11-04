@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Edge, SelectOption } from '../../types';
-import { ancestors, buildGraph, defaultLinearEdges, descendants, findCycle, topoOrder } from '../graph';
+import { ancestors, buildGraph, defaultLinearEdges, descendants, dominators, findCycle, topoOrder } from '../graph';
 
 const opts = (...ids: string[]): SelectOption[] => ids.map((id, i) => ({ id, name: `Node ${id}`, color: i }));
 const e = (from: string, to: string): Edge => ({ from, to });
@@ -207,5 +207,79 @@ describe('topoOrder', () => {
     expect(topoOrder(g)).toEqual(['a', 'b', 'c', 'd']);
     const g2 = buildGraph(opts('p', 'q', 'r'), [e('q', 'r'), e('r', 'q')]);
     expect(topoOrder(g2)).toEqual(['p', 'q', 'r']);
+  });
+});
+
+describe('dominators', () => {
+  const sorted = (set: Set<string>) => [...set].sort();
+
+  it('is every strict ancestor on a linear pipeline', () => {
+    const g = buildGraph(opts('a', 'b', 'c', 'd'), null);
+    expect(sorted(dominators(g, 'd'))).toEqual(['a', 'b', 'c']);
+    expect(sorted(dominators(g, 'b'))).toEqual(['a']);
+  });
+
+  it('skips the alternative branches of a diamond', () => {
+    const g = buildGraph(opts('A', 'B', 'C', 'D'), DIAMOND_EDGES);
+    expect(sorted(dominators(g, 'D'))).toEqual(['A']);
+    expect(sorted(dominators(g, 'B'))).toEqual(['A']);
+  });
+
+  it('keeps only the nodes every route passes through (the contract graph from the user report)', () => {
+    // Soạn HĐ → {Chờ ký, Đã ký/Hiệu lực, Hoàn thành/Thanh lý} → Hủy
+    const g = buildGraph(opts('draft', 'wait', 'signed', 'closed', 'cancel'), [
+      e('draft', 'wait'),
+      e('draft', 'signed'),
+      e('draft', 'closed'),
+      e('wait', 'cancel'),
+      e('signed', 'cancel'),
+      e('closed', 'cancel'),
+    ]);
+    expect(sorted(dominators(g, 'cancel'))).toEqual(['draft']);
+    expect(sorted(dominators(g, 'signed'))).toEqual(['draft']);
+  });
+
+  it('finds the merge points of the Meegle DAG', () => {
+    const g = buildGraph(opts(...MEEGLE_IDS), MEEGLE_EDGES);
+    expect(sorted(dominators(g, 'H'))).toEqual(['A', 'B', 'C']);
+    expect(sorted(dominators(g, 'G'))).toEqual(['A', 'B', 'C', 'D']);
+    expect(sorted(dominators(g, 'K'))).toEqual(['A', 'B', 'C', 'J']);
+  });
+
+  it('returns an empty set for roots and unknown ids', () => {
+    const g = buildGraph(opts(...MEEGLE_IDS), MEEGLE_EDGES);
+    expect(dominators(g, 'A').size).toBe(0);
+    expect(dominators(g, 'nope').size).toBe(0);
+  });
+
+  it('needs every root to pass through a node when there are several roots', () => {
+    // r1 → m → x, r2 → m: m dominates x, neither root does.
+    const g = buildGraph(opts('r1', 'r2', 'm', 'x'), [e('r1', 'm'), e('r2', 'm'), e('m', 'x')]);
+    expect(sorted(dominators(g, 'x'))).toEqual(['m']);
+    expect(dominators(g, 'm').size).toBe(0);
+  });
+
+  it('terminates on cycles and never includes the node itself', () => {
+    // a → b ⇄ c → d
+    const cyc = buildGraph(opts('a', 'b', 'c', 'd'), [e('a', 'b'), e('b', 'c'), e('c', 'b'), e('c', 'd')]);
+    expect(sorted(dominators(cyc, 'd'))).toEqual(['a', 'b', 'c']);
+    expect(sorted(dominators(cyc, 'b'))).toEqual(['a']);
+    expect(dominators(cyc, 'c').has('c')).toBe(false);
+    // A cycle no root leads to: nothing can be inferred.
+    const loose = buildGraph(opts('p', 'q', 'r'), [e('q', 'r'), e('r', 'q')]);
+    expect(dominators(loose, 'r').size).toBe(0);
+  });
+
+  it('lists the dominators in option order (deterministic)', () => {
+    const g = buildGraph(opts(...MEEGLE_IDS), MEEGLE_EDGES);
+    expect([...dominators(g, 'K')]).toEqual(['A', 'B', 'C', 'J']);
+  });
+
+  it('returns a fresh set each call (results are memoized per graph)', () => {
+    const g = buildGraph(opts(...MEEGLE_IDS), MEEGLE_EDGES);
+    const first = dominators(g, 'H');
+    first.add('X');
+    first.delete('A');
+    expect(sorted(dominators(g, 'H'))).toEqual(['A', 'B', 'C']);
   });
 });

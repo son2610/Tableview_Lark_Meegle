@@ -242,6 +242,7 @@ function ReadyView({ data, ctx }: { data: PipelineData; ctx: PipelineContextValu
       saveConfig={data.saveConfig}
       createField={data.createField}
       addStageOption={data.addStageOption}
+      addSelectOptions={data.addSelectOptions}
     />
   ) : null;
 

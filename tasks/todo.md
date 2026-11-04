@@ -42,3 +42,20 @@ NOT verified: running inside real Lark (needs App ID + BlockTypeID + opdev login
 Email and loadConfig error semantics are verified only against typings/JS + fake SDK.
 Follow-ups: parallel nodes via a multi-select stage field; server-side guard (Base automation) for stage edits made
 in the grid; dark-mode option colours; cheaper source-view membership check; vendor.js is 1.7 MB (Semi + SDK).
+
+## "Steps passed" field — review fixes (2026-11-04)
+- [x] Path cell read as a route (`pathCoverage`): walk back from the current step through ticked predecessors; a gap
+      (stage changed in the grid, partial hand ticks, step without option) makes the earlier steps 'unknown', never
+      'skipped'; dominators of current + ticked steps always 'done'; rollback offers visited ∪ certain ∪ uncovered.
+- [x] Seeding an empty cell replays the history (rollback unticks descendants), adds dominators only when that does
+      not fake a recorded route across a shortcut edge; the cell is written on every move (no more "leave alone").
+- [x] advance/complete drop ticks that do not lead to the current step; unknown-id cell items are kept on write.
+- [x] History log whose first line is a rollback anchors at the rollback target.
+- [x] Option creation serialized per field (`createKeyedQueue`), fields re-read after a failed add.
+- [x] Legend "Đã bỏ qua" + explanatory title for skipped steps; hint wording; README/DESIGN updated.
+Review: 430 tests (16 new, 7 old expectations changed to the new semantics), tsc clean, build:demo OK, live demo
+checked (unknown record advanced → path written, branch stays unknown; grid stage jump → unknown not skipped).
+Risks: shortcut edges + grid edits can still fake a recorded route (documented in README §4). Writing back a cell
+item whose option id the cache does not know assumes the host still has that option.
+Follow-ups: offer to RENAME a stale path option when a stage was renamed (FieldsTab); history display still uses
+the union of all logged names (a branch abandoned by a rollback shows done until the path field is used).

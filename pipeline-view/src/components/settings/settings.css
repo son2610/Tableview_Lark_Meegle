@@ -72,6 +72,21 @@
   color: var(--pv-text);
 }
 
+/* A notice line with an action button on the right (wraps under the text when narrow). */
+.pv-set-notice__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.pv-set-notice__row > span {
+  flex: 1 1 240px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .pv-set-notice--danger {
   border-color: transparent;
   background: var(--pv-danger-soft);
